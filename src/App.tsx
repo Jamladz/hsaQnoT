@@ -160,7 +160,20 @@ export default function App() {
   useEffect(() => {
     // Initialize Telegram WebApp
     WebApp.ready();
-    WebApp.expand(); // Full screen
+    WebApp.expand(); // Expands to maximum height
+    
+    // Attempt official full-screen mode (Bot API 7.0+)
+    try {
+      if ((WebApp as any).requestFullscreen) {
+        (WebApp as any).requestFullscreen();
+      }
+      if ((WebApp as any).disableVerticalSwipes) {
+        (WebApp as any).disableVerticalSwipes();
+      }
+    } catch (e) {
+      console.warn("Fullscreen/Swipe methods not supported", e);
+    }
+
     try {
       WebApp.setHeaderColor('#1a1b26');
       WebApp.setBackgroundColor('#1a1b26');

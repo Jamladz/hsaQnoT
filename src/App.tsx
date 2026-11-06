@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Wallet, Users, User, Trophy, Play, Loader2, Share2, Copy, CheckCircle2, ArrowDownToLine, ArrowUpFromLine, Globe, Volume2, VolumeX, CheckSquare, Tv, Bell, Star, Crown } from 'lucide-react';
+import { Wallet, Users, User, Trophy, Play, Loader2, Share2, Copy, CheckCircle2, ArrowDownToLine, ArrowUpFromLine, Globe, Volume2, VolumeX, CheckSquare, Tv, Bell, Star, Crown, Search, RefreshCw, ShieldCheck, Sparkles, Flame, Activity, Trash2, Edit3 } from 'lucide-react';
 import { useTonWallet, useTonConnectUI } from '@tonconnect/ui-react';
 import { cn, triggerHaptic } from './lib/utils';
 import { playSound, toggleMute, getIsMuted } from './lib/sounds';
@@ -11,9 +11,15 @@ import confetti from 'canvas-confetti';
 const myConfetti = confetti.create(undefined, { useWorker: false, resize: true });
 import WebApp from '@twa-dev/sdk';
 
+// --- Generated High-Fidelity Visual Assets ---
+const BULL_MASCOT_IMG = '/src/assets/images/bull_cyber_mascot_1793921339487.jpg';
+const BEAR_MASCOT_IMG = '/src/assets/images/bear_cyber_mascot_1793921341555.jpg';
+const PEPE_PRIZE_IMG = '/src/assets/images/prize_plush_pepe_1793921342657.jpg';
+const GIFT_PRIZE_IMG = '/src/assets/images/prize_mystery_ton_box_1793921343824.jpg';
+
 // --- Icons ---
 export const TonIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <svg className={cn("shrink-0", className)} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path d="M12 24C18.6274 24 24 18.6274 24 12C24 5.37258 18.6274 0 12 0C5.37258 0 0 5.37258 0 12C0 18.6274 5.37258 24 12 24Z" fill="#0098EA"/>
     <path d="M6.50195 7.33398H17.498C18.4847 7.33398 19.0647 8.42398 18.5113 9.24398L12.9446 17.4973C12.4846 18.1773 11.5113 18.1773 11.0513 17.4973L5.48462 9.24398C4.93129 8.42398 5.51795 7.33398 6.50195 7.33398ZM12 15.6673L16.248 9.33398H7.75195L12 15.6673Z" fill="white"/>
   </svg>
@@ -56,6 +62,7 @@ const WAITING_DURATION = 20; // seconds for waiting
 const HOUSE_EDGE = 0.03; // 3%
 const REFERRAL_BONUS = 0.10; // 10%
 const MIN_BUY_IN = 0.1;
+const ADMIN_USERNAME = '@sekanedr_is';
 
 // --- Types ---
 type Participant = {
@@ -68,6 +75,7 @@ type Participant = {
 };
 
 type GameState = 'waiting' | 'playing' | 'finished';
+type Tab = 'game' | 'referrals' | 'profile' | 'tasks' | 'admin';
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -77,7 +85,7 @@ export default function App() {
   const [showReferralWelcome, setShowReferralWelcome] = useState(false);
   const [showEarnPopup, setShowEarnPopup] = useState(false);
   
-  const [activeTab, setActiveTab] = useState<'game' | 'referrals' | 'profile' | 'tasks'>('game');
+  const [activeTab, setActiveTab] = useState<Tab>('game');
   const [activeGame, setActiveGame] = useState<'game1' | 'game2'>('game2');
   const wallet = useTonWallet();
   const [tonConnectUI] = useTonConnectUI();
@@ -91,7 +99,21 @@ export default function App() {
   const [showWelcomeDeposit, setShowWelcomeDeposit] = useState(false);
   const [showUpdateInfo, setShowUpdateInfo] = useState(false);
   const [hasUnreadUpdates, setHasUnreadUpdates] = useState(() => !localStorage.getItem('tq_update_seen_v3'));
+  const [topUpToast, setTopUpToast] = useState<{ visible: boolean; neededAmount: number }>({ visible: false, neededAmount: 1 });
+  const topUpToastTimeout = useRef<NodeJS.Timeout | null>(null);
   const prevWalletConnected = useRef(false);
+
+  const triggerTopUpToast = useCallback((neededAmount: number) => {
+    playSound('click');
+    triggerHaptic('medium');
+    if (topUpToastTimeout.current) {
+      clearTimeout(topUpToastTimeout.current);
+    }
+    setTopUpToast({ visible: true, neededAmount: Math.max(0.1, Number(neededAmount.toFixed(1))) });
+    topUpToastTimeout.current = setTimeout(() => {
+      setTopUpToast((prev) => ({ ...prev, visible: false }));
+    }, 4200);
+  }, []);
   
   useEffect(() => {
     localStorage.setItem('tq_real_balance_v2', balance.toString());
@@ -151,6 +173,7 @@ export default function App() {
     }
     return '@TelegramUser';
   });
+  const isAdmin = username === ADMIN_USERNAME;
   const [photoUrl, setPhotoUrl] = useState(() => WebApp.initDataUnsafe?.user?.photo_url || '');
   const [lang, setLang] = useState<Language>('en');
   const [muted, setMuted] = useState(getIsMuted());
@@ -175,36 +198,92 @@ export default function App() {
     }
 
     try {
-      WebApp.setHeaderColor('#1a1b26');
-      WebApp.setBackgroundColor('#1a1b26');
+      WebApp.setHeaderColor('#0B0F19');
+      WebApp.setBackgroundColor('#0B0F19');
     } catch (e) {}
     
-    // Check for referral start_param
-    const startParam = WebApp.initDataUnsafe?.start_param;
+    // Check for referral start_param from Telegram WebApp or URL query parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const startParam =
+      WebApp.initDataUnsafe?.start_param ||
+      urlParams.get('startapp') ||
+      urlParams.get('tgWebAppStartParam') ||
+      urlParams.get('ref') ||
+      urlParams.get('invite');
+
     if (startParam && !localStorage.getItem('tonqash_referrer')) {
-      // User joined via a referral link!
-      localStorage.setItem('tonqash_referrer', startParam);
-      // In a real app, you would send this to your backend here
-      console.log('Joined via referral:', startParam);
-      
-      // Show welcome bonus after loading
-      setTimeout(() => {
-        setShowReferralWelcome(true);
-      }, 3000);
+      localStorage.setItem('tonqash_referrer', startParam.trim());
     }
 
-    // Generate or load User ID
-    let uid = localStorage.getItem('tonqash_uid');
+    // Generate or load User ID (prefer real Telegram ID when inside Telegram)
+    const tgUser = WebApp.initDataUnsafe?.user;
+    let uid = tgUser?.id ? String(tgUser.id) : localStorage.getItem('tonqash_uid');
     if (!uid) {
-      uid = Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+      uid = 'tg_' + Math.random().toString(36).substring(2, 10);
+      localStorage.setItem('tonqash_uid', uid);
+    } else {
       localStorage.setItem('tonqash_uid', uid);
     }
     setUserId(uid);
 
+    // Sync real Telegram user with persistent backend database
+    const syncUserWithDatabase = async (isInitialSession = false) => {
+      try {
+        const storedGames = parseInt(localStorage.getItem('tq_user_games_played') || '0') + parseInt(localStorage.getItem('game2_games_played') || '0');
+        const storedWins = parseInt(localStorage.getItem('tq_user_wins') || '0');
+        const storedWagered = parseFloat(localStorage.getItem('tq_user_total_wagered') || '0');
+        const currentBal = parseFloat(localStorage.getItem('tq_real_balance_v2') || '0');
+
+        const res = await fetch('/api/users/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: uid,
+            telegramId: tgUser?.id || null,
+            username: tgUser?.username ? `@${tgUser.username}` : username,
+            firstName: tgUser?.first_name || username.replace(/^@/, ''),
+            lastName: tgUser?.last_name || '',
+            photoUrl: tgUser?.photo_url || '',
+            languageCode: tgUser?.language_code || localStorage.getItem('tonqash_lang') || 'en',
+            isPremium: Boolean((tgUser as any)?.is_premium),
+            balance: currentBal,
+            gamesPlayed: storedGames,
+            wins: storedWins,
+            totalWagered: storedWagered,
+            referredBy: localStorage.getItem('tonqash_referrer') || null,
+            walletAddress: wallet?.account?.address || null,
+            platform: (WebApp as any).platform || 'Telegram Mini App',
+            isInitialSession,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.user) {
+            if (typeof data.user.referralsCount === 'number') {
+              localStorage.setItem('portals_total_referrals', String(data.user.referralsCount));
+            }
+            if (typeof data.user.referralEarnings === 'number') {
+              localStorage.setItem('portals_earned_ton', String(data.user.referralEarnings));
+            }
+            if (typeof data.referralBonusGranted === 'number' && data.referralBonusGranted > 0) {
+              setBalance(data.user.balance);
+              playSound('win');
+            } else if (typeof data.user.balance === 'number' && Math.abs(data.user.balance - currentBal) > 0.001 && !isInitialSession) {
+              setBalance(data.user.balance);
+            }
+          }
+        }
+      } catch (err) {
+        // Silent fallback if offline
+      }
+    };
+
+    syncUserWithDatabase(true);
+
     // Live Users Simulation
     const interval = setInterval(() => {
       setLiveUsers(prev => {
-        const change = Math.floor(Math.random() * 11) - 5; // -5 to +5
+        const change = Math.floor(Math.random() * 11) - 5;
         let next = prev + change;
         if (next < 2400) next = 2400 + Math.floor(Math.random() * 20);
         if (next > 2600) next = 2600 - Math.floor(Math.random() * 20);
@@ -214,44 +293,45 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Sync balance and wallet updates to backend DB
   useEffect(() => {
-    // Simulate loading
+    if (!userId) return;
+    const tgUser = WebApp.initDataUnsafe?.user;
+    const storedGames = parseInt(localStorage.getItem('tq_user_games_played') || '0') + parseInt(localStorage.getItem('game2_games_played') || '0');
+    const storedWins = parseInt(localStorage.getItem('tq_user_wins') || '0');
+    const storedWagered = parseFloat(localStorage.getItem('tq_user_total_wagered') || '0');
+
+    fetch('/api/users/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: userId,
+        telegramId: tgUser?.id || null,
+        username,
+        firstName: tgUser?.first_name || username.replace(/^@/, ''),
+        lastName: tgUser?.last_name || '',
+        photoUrl,
+        languageCode: lang,
+        balance,
+        gamesPlayed: storedGames,
+        wins: storedWins,
+        totalWagered: storedWagered,
+        walletAddress: wallet?.account?.address || null,
+        isInitialSession: false,
+      }),
+    }).catch(() => {});
+  }, [balance, walletConnected, lang, userId]);
+
+  useEffect(() => {
+    // Fast, smooth entry
     const loadTimer = setTimeout(() => {
       setIsLoading(false);
 
-      // Check language
       const savedLang = localStorage.getItem('tonqash_lang');
       if (savedLang) {
         setLang(savedLang as Language);
-      } else {
-        setShowLangPrompt(true);
       }
-
-      // Check daily referral
-      const lastRefPrompt = localStorage.getItem('tonqash_last_ref_prompt');
-      const now = Date.now();
-      if (!lastRefPrompt || now - parseInt(lastRefPrompt) > 86400000) {
-        setTimeout(() => {
-          setShowDailyRefPrompt(true);
-          localStorage.setItem('tonqash_last_ref_prompt', now.toString());
-        }, 1000);
-      }
-
-      // Daily Bonus & Earn Popup
-      const lastBonus = localStorage.getItem('tonqash_last_bonus');
-      if (!lastBonus || now - parseInt(lastBonus) > 86400000) {
-         setTimeout(() => {
-           setShowDailyBonus(true);
-           localStorage.setItem('tonqash_last_bonus', now.toString());
-         }, 2000);
-      } else {
-         // Show Earn Popup if daily bonus is not shown
-         setTimeout(() => {
-           setShowEarnPopup(true);
-         }, 1000);
-      }
-
-    }, 2500);
+    }, 650);
     return () => clearTimeout(loadTimer);
   }, []);
 
@@ -268,45 +348,151 @@ export default function App() {
     setShowLangPrompt(false);
   };
 
+  const cycleLanguage = () => {
+    const order: Language[] = ['en', 'ar', 'ru'];
+    const next = order[(order.indexOf(lang) + 1) % order.length];
+    handleLangSelect(next);
+  };
+
   if (isLoading) {
     return (
-      <div className="flex flex-col h-[100dvh] max-w-md mx-auto bg-[var(--color-tg-bg)] text-white items-center justify-center relative shadow-2xl overflow-hidden">
-         <motion.div animate={{ scale: [1, 1.2, 1], rotate: [0, 360] }} transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}>
-           <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-[var(--color-game-primary)] to-[var(--color-game-secondary)] flex items-center justify-center font-bold text-6xl shadow-2xl shadow-[var(--color-game-primary)] text-stroke border-4 border-black/20">
-             T
-           </div>
-         </motion.div>
-         <h1 className="mt-6 font-bold text-4xl tracking-tight text-stroke text-white animate-pulse">TonQash</h1>
-         <div className="w-48 h-3 bg-black/30 rounded-full mt-10 overflow-hidden cartoon-border">
-           <motion.div
-             initial={{ width: 0 }}
-             animate={{ width: "100%" }}
-             transition={{ duration: 2.5, ease: "easeInOut" }}
-             className="h-full bg-gradient-to-r from-[var(--color-game-primary)] to-[var(--color-game-accent)]"
-           />
-         </div>
-         <p className="mt-4 text-[var(--color-tg-muted)] text-sm font-bold uppercase tracking-widest animate-pulse">LOADING...</p>
+      <div className="flex flex-col h-[100dvh] w-full max-w-md md:max-w-2xl mx-auto bg-[#090C12] text-white items-center justify-center relative overflow-hidden px-6">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.35, ease: "easeOut" }}
+          className="flex flex-col items-center"
+        >
+          <div className="w-16 h-16 rounded-2xl bg-[#0098EA] flex items-center justify-center shadow-[0_8px_30px_rgba(0,152,234,0.35)]">
+            <TonIcon className="w-10 h-10" />
+          </div>
+          <h1 className="mt-4 font-display font-bold text-2xl tracking-tight text-white">TonQash</h1>
+          <div className="w-32 h-1 bg-white/10 rounded-full mt-5 overflow-hidden">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: "100%" }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+              className="h-full rounded-full bg-[#0098EA]"
+            />
+          </div>
+        </motion.div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-[100dvh] max-w-md mx-auto bg-[var(--color-tg-bg)] text-white overflow-hidden relative shadow-2xl">
-      {/* Header */}
-      <header className="flex flex-col gap-2 p-4 bg-[var(--color-game-card)] border-b-4 border-black/20 z-10 cartoon-border m-2 rounded-2xl">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--color-game-primary)] to-[var(--color-game-secondary)] flex items-center justify-center font-bold text-2xl shadow-lg shadow-black/50 text-stroke border-2 border-black/20">
-              T
-            </div>
-            <div className="flex flex-col">
-              <h1 className="font-bold text-xl tracking-tight text-stroke text-white leading-none">{t('appName')}</h1>
-              <div className="flex items-center gap-1 mt-1">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]" />
-                <span className="text-[10px] font-bold text-white/80">{liveUsers.toLocaleString()} Online</span>
+    <div 
+      className={cn(
+        "flex flex-col h-[100dvh] w-full max-w-md md:max-w-2xl lg:max-w-3xl mx-auto bg-[#090C12] text-white overflow-hidden relative md:border-x md:border-white/[0.06] select-none",
+        lang === 'ar' ? "rtl" : "ltr"
+      )}
+      dir={lang === 'ar' ? 'rtl' : 'ltr'}
+    >
+      {/* Sleek Floating Insufficient-Balance Top-Up Toast Notification */}
+      <AnimatePresence>
+        {topUpToast.visible && (
+          <motion.div
+            initial={{ opacity: 0, y: -24, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -18, scale: 0.96 }}
+            transition={{ type: "spring", stiffness: 420, damping: 28 }}
+            className="fixed top-16 left-3.5 right-3.5 max-w-md mx-auto z-50 pointer-events-none"
+          >
+            <div className="pointer-events-auto bg-[#131C31]/95 backdrop-blur-2xl border border-[#0098EA]/40 rounded-2xl p-3 shadow-[0_14px_34px_rgba(0,0,0,0.65),0_0_24px_rgba(0,152,234,0.22)] flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-[#0098EA]/15 border border-[#0098EA]/35 flex items-center justify-center shrink-0">
+                  <TonIcon className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-display font-bold text-white truncate">
+                    {lang === 'ar'
+                      ? 'رصيدك غير كافٍ لدخول الجولة'
+                      : lang === 'ru'
+                      ? 'Недостаточно TON для игры'
+                      : 'Insufficient Balance to Play'}
+                  </p>
+                  <p className="text-[11px] text-slate-300 truncate mt-0.5">
+                    {lang === 'ar'
+                      ? `اشحن حسابك الآن بـ TON وابدأ اللعب فوراً`
+                      : lang === 'ru'
+                      ? `Пополните баланс TON, чтобы вступить в раунд`
+                      : `Top up your TON balance to join this round`}
+                  </p>
+                </div>
               </div>
+
+              <button
+                onClick={() => {
+                  playSound('click');
+                  triggerHaptic('light');
+                  setTopUpToast((prev) => ({ ...prev, visible: false }));
+                  setDepositAmount(Math.max(1, Math.ceil(topUpToast.neededAmount)));
+                  if (walletConnected) {
+                    setShowDeposit(true);
+                  } else {
+                    tonConnectUI.openModal();
+                  }
+                }}
+                className="bg-[#0098EA] hover:bg-[#0088D1] text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-[0_4px_14px_rgba(0,152,234,0.35)] active:scale-95 transition-all shrink-0 whitespace-nowrap"
+              >
+                <ArrowDownToLine size={14} />
+                <span>{lang === 'ar' ? 'شحن الآن' : lang === 'ru' ? 'Пополнить' : 'Top Up'}</span>
+              </button>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Minimalist Single-Row Top Bar */}
+      <header className="shrink-0 px-4 h-14 bg-[#090C12]/90 backdrop-blur-xl border-b border-white/[0.06] flex items-center justify-between gap-3 z-30">
+        {/* Brand & Live Status */}
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-xl bg-[#0098EA] flex items-center justify-center shrink-0">
+            <TonIcon className="w-5 h-5" />
           </div>
+          <div className="flex items-baseline gap-2 min-w-0">
+            <h1 className="font-display font-bold text-base tracking-tight text-white truncate">{t('appName')}</h1>
+            <span className="text-[11px] font-mono-num text-slate-400 hidden xs:inline">
+              {liveUsers.toLocaleString()} online
+            </span>
+          </div>
+        </div>
+
+        {/* Clean Action Bar */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={() => {
+              playSound('click');
+              triggerHaptic('light');
+              setShowUpdateInfo(true);
+              setHasUnreadUpdates(false);
+              localStorage.setItem('tq_update_seen_v3', 'true');
+            }}
+            aria-label="Updates"
+            className="w-9 h-9 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-slate-400 hover:text-white transition-colors relative"
+          >
+            <Bell size={16} />
+            {hasUnreadUpdates && (
+              <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-[#0098EA] rounded-full" />
+            )}
+          </button>
+
+          <button
+            onClick={handleToggleMute}
+            aria-label="Toggle Audio"
+            className="w-9 h-9 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-slate-400 hover:text-white transition-colors"
+          >
+            {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+          </button>
+
+          <button
+            onClick={cycleLanguage}
+            className="h-9 px-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-[11px] font-bold uppercase text-slate-300 hover:text-white transition-colors flex items-center gap-1"
+          >
+            <Globe size={13} className="text-slate-400" />
+            <span>{lang}</span>
+          </button>
+
           <button 
             onClick={() => { 
               playSound('click'); 
@@ -317,121 +503,123 @@ export default function App() {
               }
             }}
             className={cn(
-              "px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all cartoon-button text-stroke",
+              "h-9 px-3.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all luxury-button whitespace-nowrap",
               walletConnected 
-                ? "bg-gradient-to-b from-green-400 to-green-600 text-white" 
-                : "bg-gradient-to-b from-[var(--color-game-accent)] to-orange-500 text-white"
+                ? "bg-white/[0.08] hover:bg-white/[0.12] text-white border border-white/10" 
+                : "bg-[#0098EA] hover:bg-[#0088D1] text-white"
             )}
           >
-            <Wallet size={18} className="drop-shadow-md" />
-            {walletConnected || balance > 0 ? <span className="flex items-center gap-1">{balance.toFixed(2)} <TonIcon className="w-4 h-4" /></span> : t('connect')}
+            <Wallet size={14} className="shrink-0" />
+            {walletConnected || balance > 0 ? (
+              <span className="flex items-center gap-1 font-mono-num font-bold">
+                {balance.toFixed(2)} <TonIcon className="w-3.5 h-3.5" />
+              </span>
+            ) : (
+              <span>{t('connect')}</span>
+            )}
           </button>
-        </div>
-        
-        {/* Language Switcher & Mute */}
-        <div className="flex items-center justify-between mt-1">
-          <button onClick={handleToggleMute} className="text-white/50 hover:text-white transition-colors p-1">
-            {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
-          </button>
-          <div className="flex items-center gap-2">
-            <Globe size={14} className="text-white/50" />
-            <button onClick={() => handleLangSelect('en')} className={cn("text-xs font-bold px-2 py-1 rounded-md transition-all", lang === 'en' ? "bg-white/20 text-white" : "text-white/50 hover:text-white/80")}>EN</button>
-            <button onClick={() => handleLangSelect('ru')} className={cn("text-xs font-bold px-2 py-1 rounded-md transition-all", lang === 'ru' ? "bg-white/20 text-white" : "text-white/50 hover:text-white/80")}>RU</button>
-            <button onClick={() => handleLangSelect('ar')} className={cn("text-xs font-bold px-2 py-1 rounded-md transition-all", lang === 'ar' ? "bg-white/20 text-white" : "text-white/50 hover:text-white/80")}>AR</button>
-          </div>
         </div>
       </header>
 
-      {/* Live Activity Ticker */}
-      <div className="bg-black/20 border-b border-white/5 overflow-hidden flex items-center py-1.5 relative">
-        <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-[#1a1b26] to-transparent z-10 pointer-events-none"></div>
-        <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-[#1a1b26] to-transparent z-10 pointer-events-none"></div>
-        <div className="flex items-center w-max animate-marquee">
-          {/* First set */}
-          <div className="flex items-center gap-4 px-4">
-            <span className="flex items-center gap-1 text-xs text-indigo-200 font-medium"><Trophy size={12} className="text-yellow-400"/> @crypto_king won 150 <TonIcon className="w-3 h-3 inline-block" /></span>
-            <span className="text-white/20 text-[10px]">●</span>
-            <span className="flex items-center gap-1 text-xs text-indigo-200 font-medium"><Trophy size={12} className="text-yellow-400"/> @alex_ton won 45 <TonIcon className="w-3 h-3 inline-block" /></span>
-            <span className="text-white/20 text-[10px]">●</span>
-            <span className="flex items-center gap-1 text-xs text-indigo-200 font-medium"><Trophy size={12} className="text-yellow-400"/> @sarah_99 won 80 <TonIcon className="w-3 h-3 inline-block" /></span>
-            <span className="text-white/20 text-[10px]">●</span>
-            <span className="flex items-center gap-1 text-xs text-indigo-200 font-medium"><Trophy size={12} className="text-yellow-400"/> @mike_pro won 12 <TonIcon className="w-3 h-3 inline-block" /></span>
-          </div>
-          {/* Duplicate set for seamless loop */}
-          <div className="flex items-center gap-4 px-4">
-            <span className="flex items-center gap-1 text-xs text-indigo-200 font-medium"><Trophy size={12} className="text-yellow-400"/> @crypto_king won 150 <TonIcon className="w-3 h-3 inline-block" /></span>
-            <span className="text-white/20 text-[10px]">●</span>
-            <span className="flex items-center gap-1 text-xs text-indigo-200 font-medium"><Trophy size={12} className="text-yellow-400"/> @alex_ton won 45 <TonIcon className="w-3 h-3 inline-block" /></span>
-            <span className="text-white/20 text-[10px]">●</span>
-            <span className="flex items-center gap-1 text-xs text-indigo-200 font-medium"><Trophy size={12} className="text-yellow-400"/> @sarah_99 won 80 <TonIcon className="w-3 h-3 inline-block" /></span>
-            <span className="text-white/20 text-[10px]">●</span>
-            <span className="flex items-center gap-1 text-xs text-indigo-200 font-medium"><Trophy size={12} className="text-yellow-400"/> @mike_pro won 12 <TonIcon className="w-3 h-3 inline-block" /></span>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content Area - Using CSS hiding for state persistence */}
-      <main className="flex-1 overflow-hidden relative">
-        <div className={cn("absolute inset-0 overflow-y-auto overflow-x-hidden transition-opacity duration-300 pb-32", activeTab === 'game' ? "opacity-100 z-10" : "opacity-0 pointer-events-none z-0")}>
-          <div className="sticky top-0 z-50 bg-[#0f1016]/90 backdrop-blur-md px-2 pt-2 pb-1 border-b border-white/5 shadow-lg">
-            <div className="flex bg-white/5 rounded-lg p-1 border border-white/10 max-w-md mx-auto">
+      {/* Main Content Area */}
+      <main className="flex-1 overflow-hidden relative touch-pan-y">
+        <div className={cn("absolute inset-0 overflow-y-auto overflow-x-hidden transition-opacity duration-200 pb-24 overscroll-contain custom-scrollbar", activeTab === 'game' ? "opacity-100 z-10" : "opacity-0 pointer-events-none z-0")}>
+          {/* Minimalist Segmented Arena Switcher */}
+          <div className="sticky top-0 z-30 bg-[#090C12]/90 backdrop-blur-xl px-4 pt-3 pb-2">
+            <div className="grid grid-cols-2 gap-1 bg-[#111622] p-1 rounded-xl border border-white/[0.06]">
               <button 
-                onClick={() => setActiveGame('game2')}
-                className={cn("flex-1 py-1.5 rounded-md font-bold text-xs transition-all", activeGame === 'game2' ? "bg-indigo-600 text-white shadow-lg" : "text-white/50 hover:text-white/80")}
+                onClick={() => { playSound('click'); setActiveGame('game2'); }}
+                className={cn(
+                  "py-2 px-3 rounded-lg font-semibold text-xs transition-all flex items-center justify-center gap-1.5 whitespace-nowrap",
+                  activeGame === 'game2'
+                    ? "bg-white/[0.1] text-white shadow-sm"
+                    : "text-slate-400 hover:text-slate-200"
+                )}
               >
-                Game 2
+                <span>Bears vs Bulls</span>
               </button>
               <button 
-                onClick={() => setActiveGame('game1')}
-                className={cn("flex-1 py-1.5 rounded-md font-bold text-xs transition-all", activeGame === 'game1' ? "bg-indigo-600 text-white shadow-lg" : "text-white/50 hover:text-white/80")}
+                onClick={() => { playSound('click'); setActiveGame('game1'); }}
+                className={cn(
+                  "py-2 px-3 rounded-lg font-semibold text-xs transition-all flex items-center justify-center gap-1.5 whitespace-nowrap",
+                  activeGame === 'game1'
+                    ? "bg-white/[0.1] text-white shadow-sm"
+                    : "text-slate-400 hover:text-slate-200"
+                )}
               >
-                Game 1
+                <span>Jackpot Wheel</span>
               </button>
             </div>
           </div>
           {activeGame === 'game1' ? (
-            <GameTab walletConnected={walletConnected} balance={balance} setBalance={setBalance} username={username} t={t} />
+            <GameTab walletConnected={walletConnected} balance={balance} setBalance={setBalance} username={username} t={t} onInsufficientBalance={triggerTopUpToast} />
           ) : (
-            <Game2Tab walletConnected={walletConnected} balance={balance} setBalance={setBalance} username={username} t={t} />
+            <Game2Tab walletConnected={walletConnected} balance={balance} setBalance={setBalance} username={username} t={t} onInsufficientBalance={triggerTopUpToast} />
           )}
         </div>
-        <div className={cn("absolute inset-0 overflow-y-auto overflow-x-hidden transition-opacity duration-300 pb-32", activeTab === 'tasks' ? "opacity-100 z-10" : "opacity-0 pointer-events-none z-0")}>
+        <div className={cn("absolute inset-0 overflow-y-auto overflow-x-hidden transition-opacity duration-200 pb-24 overscroll-contain custom-scrollbar", activeTab === 'tasks' ? "opacity-100 z-10" : "opacity-0 pointer-events-none z-0")}>
           <TasksTab t={t} balance={balance} setBalance={setBalance} userId={userId} />
         </div>
-        <div className={cn("absolute inset-0 overflow-y-auto overflow-x-hidden transition-opacity duration-300 pb-32", activeTab === 'referrals' ? "opacity-100 z-10" : "opacity-0 pointer-events-none z-0")}>
-          <ReferralsTab t={t} userId={userId} />
+        <div className={cn("absolute inset-0 overflow-y-auto overflow-x-hidden transition-opacity duration-200 pb-24 overscroll-contain custom-scrollbar", activeTab === 'referrals' ? "opacity-100 z-10" : "opacity-0 pointer-events-none z-0")}>
+          <ReferralsTab t={t} userId={userId} balance={balance} setBalance={setBalance} lang={lang} />
         </div>
-        <div className={cn("absolute inset-0 overflow-y-auto overflow-x-hidden transition-opacity duration-300 pb-32", activeTab === 'profile' ? "opacity-100 z-10" : "opacity-0 pointer-events-none z-0")}>
-          <ProfileTab username={username} photoUrl={photoUrl} balance={balance} setBalance={setBalance} walletConnected={walletConnected} t={t} onDepositClick={() => setShowDeposit(true)} />
+        <div className={cn("absolute inset-0 overflow-y-auto overflow-x-hidden transition-opacity duration-200 pb-28 overscroll-contain custom-scrollbar", activeTab === 'profile' ? "opacity-100 z-10" : "opacity-0 pointer-events-none z-0")}>
+          <ProfileTab
+            username={username}
+            photoUrl={photoUrl}
+            userId={userId}
+            balance={balance}
+            setBalance={setBalance}
+            walletConnected={walletConnected}
+            walletAddress={wallet?.account?.address || null}
+            onConnectWallet={() => tonConnectUI.openModal()}
+            onDisconnectWallet={() => tonConnectUI.disconnect()}
+            onNavigateTab={(tab) => setActiveTab(tab)}
+            lang={lang}
+            t={t}
+            onDepositClick={() => setShowDeposit(true)}
+          />
         </div>
+        {isAdmin && (
+          <div className={cn("absolute inset-0 overflow-y-auto overflow-x-hidden transition-opacity duration-200 pb-24 overscroll-contain custom-scrollbar", activeTab === 'admin' ? "opacity-100 z-10" : "opacity-0 pointer-events-none z-0")}>
+            <AdminTab t={t} balance={balance} setBalance={setBalance} currentUserId={userId} />
+          </div>
+        )}
       </main>
 
-      {/* Bottom Navigation */}
-      <nav className="absolute bottom-4 left-4 right-4 bg-[var(--color-game-card)] rounded-2xl cartoon-border z-20 shadow-2xl shadow-black/50">
-        <div className="flex justify-around p-2">
-          <NavButton icon={<Trophy />} label={t('game')} active={activeTab === 'game'} onClick={() => { playSound('click'); triggerHaptic('light'); setActiveTab('game'); }} />
-          <NavButton icon={<CheckSquare />} label={t('tasks')} active={activeTab === 'tasks'} onClick={() => { playSound('click'); triggerHaptic('light'); setActiveTab('tasks'); }} />
-          <NavButton icon={<Users />} label={t('referrals')} active={activeTab === 'referrals'} onClick={() => { playSound('click'); triggerHaptic('light'); setActiveTab('referrals'); }} />
-          <NavButton icon={<User />} label={t('profile')} active={activeTab === 'profile'} onClick={() => { playSound('click'); triggerHaptic('light'); setActiveTab('profile'); }} />
+      {/* Floating Bottom Navigation: Rounded-Edge Capsule Frame + Standalone Profile Icon on Same Row */}
+      <nav className="fixed bottom-0 left-0 right-0 max-w-md md:max-w-2xl lg:max-w-3xl mx-auto px-4 pt-2 pb-[calc(env(safe-area-inset-bottom,0px)+12px)] z-30 pointer-events-none">
+        <div className="flex items-center gap-2.5 pointer-events-auto">
+          {/* Rounded-Edges Capsule Frame for Main Navigation Buttons */}
+          <div className="flex-1 flex items-center justify-around bg-[#111622]/95 backdrop-blur-2xl border border-white/[0.1] rounded-full p-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.65)]">
+            <NavButton icon={<Trophy />} label={t('game')} active={activeTab === 'game'} onClick={() => { playSound('click'); triggerHaptic('light'); setActiveTab('game'); }} />
+            <NavButton icon={<CheckSquare />} label={t('tasks')} active={activeTab === 'tasks'} onClick={() => { playSound('click'); triggerHaptic('light'); setActiveTab('tasks'); }} />
+            <NavButton icon={<Users />} label={t('referrals')} active={activeTab === 'referrals'} onClick={() => { playSound('click'); triggerHaptic('light'); setActiveTab('referrals'); }} />
+            {isAdmin && (
+              <NavButton icon={<ShieldCheck />} label="Admin" active={activeTab === 'admin'} onClick={() => { playSound('click'); triggerHaptic('light'); setActiveTab('admin'); }} />
+            )}
+          </div>
+
+          {/* Standalone Circular Profile Icon Button on the Same Row */}
+          <button
+            onClick={() => {
+              playSound('click');
+              triggerHaptic('light');
+              setActiveTab('profile');
+            }}
+            aria-label={t('profile')}
+            title={t('profile')}
+            className={cn(
+              "w-[54px] h-[54px] shrink-0 rounded-full flex items-center justify-center backdrop-blur-2xl border transition-all duration-200 shadow-[0_12px_32px_rgba(0,0,0,0.65)] active:scale-95",
+              activeTab === 'profile'
+                ? "bg-[#0098EA] text-white border-[#38BDF8]/50 shadow-[0_4px_20px_rgba(0,152,234,0.45)]"
+                : "bg-[#111622]/95 text-slate-300 hover:text-white border-white/[0.1] hover:border-white/20"
+            )}
+          >
+            <User size={22} className={cn("transition-transform duration-200", activeTab === 'profile' && "scale-110")} />
+          </button>
         </div>
       </nav>
-
-      {/* Floating Update Button */}
-      <button
-        onClick={() => { 
-          playSound('click'); 
-          triggerHaptic('light');
-          setShowUpdateInfo(true); 
-          setHasUnreadUpdates(false);
-          localStorage.setItem('tq_update_seen_v3', 'true');
-        }}
-        className="fixed bottom-24 right-4 z-40 w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg cartoon-border animate-bounce"
-      >
-        <Bell className="text-white" size={24} />
-        {hasUnreadUpdates && (
-          <span className="absolute top-0 right-0 w-3.5 h-3.5 bg-red-500 border-2 border-[#1a1b26] rounded-full animate-pulse"></span>
-        )}
-      </button>
 
       {/* Modals */}
       <AnimatePresence>
@@ -440,36 +628,36 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
+            className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
           >
             <motion.div 
-              initial={{ scale: 0.9, y: 20 }}
+              initial={{ scale: 0.96, y: 10 }}
               animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              className="bg-[var(--color-game-card)] p-6 rounded-3xl cartoon-border w-full max-w-sm flex flex-col gap-4 max-h-[80vh] overflow-y-auto"
+              exit={{ scale: 0.96, y: 10 }}
+              className="bg-[#111622] border border-white/10 p-6 rounded-3xl w-full max-w-sm flex flex-col gap-4 max-h-[80vh] overflow-y-auto shadow-2xl"
             >
-              <div className="flex items-center justify-center gap-3 mb-2">
-                <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg cartoon-border shrink-0">
-                  <Bell className="text-white" size={24} />
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-[#0098EA]/15 border border-[#0098EA]/30 rounded-xl flex items-center justify-center shrink-0">
+                  <Bell className="text-[#0098EA]" size={18} />
                 </div>
-                <h3 className="text-xl font-bold text-stroke text-center">{t('updateInfoTitle')}</h3>
+                <h3 className="text-lg font-display font-bold text-white">{t('updateInfoTitle')}</h3>
               </div>
               
-              <div className="flex flex-col gap-4">
-                <div className="bg-gradient-to-br from-blue-500/20 to-indigo-500/20 p-4 rounded-xl cartoon-border border-blue-500/50">
-                  <p className="text-blue-100 text-sm leading-relaxed font-semibold">{t('updateMsg1')}</p>
+              <div className="flex flex-col gap-2.5 text-xs text-slate-300 leading-relaxed">
+                <div className="bg-white/[0.03] p-3.5 rounded-2xl border border-white/[0.06]">
+                  <p>{t('updateMsg1')}</p>
                 </div>
-                <div className="bg-gradient-to-br from-green-500/20 to-emerald-500/20 p-4 rounded-xl cartoon-border border-green-500/50">
-                  <p className="text-green-100 text-sm leading-relaxed font-semibold">{t('updateMsg2')}</p>
+                <div className="bg-white/[0.03] p-3.5 rounded-2xl border border-white/[0.06]">
+                  <p>{t('updateMsg2')}</p>
                 </div>
-                <div className="bg-gradient-to-br from-red-500/20 to-rose-500/20 p-4 rounded-xl cartoon-border border-red-500/50">
-                  <p className="text-red-100 text-sm leading-relaxed font-semibold">{t('updateMsg3')}</p>
+                <div className="bg-white/[0.03] p-3.5 rounded-2xl border border-white/[0.06]">
+                  <p>{t('updateMsg3')}</p>
                 </div>
               </div>
 
               <button 
                 onClick={() => { playSound('click'); setShowUpdateInfo(false); }} 
-                className="bg-gradient-to-b from-[var(--color-game-primary)] to-[var(--color-game-secondary)] text-white font-bold py-3 rounded-xl cartoon-button text-stroke mt-2 transition-colors"
+                className="bg-[#0098EA] hover:bg-[#0088D1] text-white font-semibold text-sm py-3 rounded-xl luxury-button mt-1"
               >
                 {t('closeBtn')}
               </button>
@@ -749,19 +937,21 @@ function NavButton({ icon, label, active, onClick }: { icon: React.ReactNode, la
     <button 
       onClick={onClick}
       className={cn(
-        "flex flex-col items-center justify-center w-20 h-16 rounded-xl transition-all duration-200",
-        active ? "text-[var(--color-game-accent)] scale-110" : "text-[var(--color-tg-muted)] hover:text-white/80 hover:scale-105"
+        "flex flex-col items-center justify-center flex-1 h-[42px] px-2 rounded-full transition-all duration-200 relative active:scale-95",
+        active
+          ? "bg-[#0098EA] text-white shadow-[0_4px_14px_rgba(0,152,234,0.4)]"
+          : "text-slate-400 hover:text-slate-200"
       )}
     >
-      <div className={cn("mb-1 transition-transform duration-300", active && "scale-125 drop-shadow-[0_0_8px_rgba(249,212,35,0.8)]")}>
-        {React.cloneElement(icon as React.ReactElement, { size: 22 })}
+      <div className="transition-transform duration-200">
+        {React.cloneElement(icon as React.ReactElement, { size: 17 })}
       </div>
-      <span className={cn("text-[10px] font-bold uppercase tracking-wider", active && "text-stroke")}>{label}</span>
+      <span className={cn("text-[10px] font-semibold tracking-tight leading-none mt-0.5 whitespace-nowrap", active ? "text-white font-bold" : "text-slate-400")}>{label}</span>
     </button>
   );
 }
 
-const Game2Tab: React.FC<{ walletConnected: boolean, balance: number, setBalance: React.Dispatch<React.SetStateAction<number>>, username: string, t: any }> = ({ walletConnected, balance, setBalance, username, t }) => {
+const Game2Tab: React.FC<{ walletConnected: boolean, balance: number, setBalance: React.Dispatch<React.SetStateAction<number>>, username: string, t: any, onInsufficientBalance: (needed: number) => void }> = ({ walletConnected, balance, setBalance, username, t, onInsufficientBalance }) => {
   const [gameState, setGameState] = useState<GameState>('waiting');
   const [timeLeft, setTimeLeft] = useState(15);
   const [redPool, setRedPool] = useState<Participant[]>([]);
@@ -964,101 +1154,126 @@ const Game2Tab: React.FC<{ walletConnected: boolean, balance: number, setBalance
   };
 
   const handleBet = (color: 'red' | 'green', amount: number) => {
-    if (gameState !== 'waiting' || !walletConnected) return;
-    if (balance < amount) return;
-    
+    if (gameState !== 'waiting') return;
+    if (balance < amount) {
+      onInsufficientBalance(amount);
+      return;
+    }
+
+    playSound('click');
+    triggerHaptic('medium');
     setBalance(prev => prev - amount);
     setUserBet({ color, amount });
   };
 
   return (
-    <div className="p-2 sm:p-4 flex flex-col min-h-full max-w-md mx-auto w-full">
-      {/* Header & History Combined */}
-      <div className="flex justify-between items-end mb-3">
-        <div>
-          <h2 className="text-xl font-black text-white italic drop-shadow-lg leading-tight">Bears vs Bulls</h2>
-          <div className="flex items-center gap-1 mt-1">
+    <div className="p-3.5 sm:p-5 flex flex-col gap-3.5 min-h-full w-full">
+      {/* Arena Header & Recent History */}
+      <div className="flex justify-between items-center glass-card rounded-2xl p-3.5">
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-display font-extrabold text-white tracking-tight leading-none">Bears vs Bulls</h2>
+            <span className="text-[11px] text-slate-400 font-medium">· 2x Pool Arena</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-slate-400 font-semibold mr-1">Last Rounds:</span>
             {history.length === 0 ? (
-              <span className="text-[10px] text-white/30 font-medium">No history</span>
+              <span className="text-[10px] text-slate-500 font-medium">Waiting for round 1</span>
             ) : (
               history.map((color, i) => (
                 <div 
                   key={i} 
                   className={cn(
-                    "w-3 h-3 rounded-full flex-shrink-0 border border-[#1a1b26] shadow-sm", 
-                    color === 'red' ? "bg-red-500" : "bg-green-500",
-                    i === history.length - 1 ? "ring-1 ring-white/50 scale-110" : "opacity-80"
+                    "w-2.5 h-2.5 rounded-full shrink-0 transition-transform", 
+                    color === 'red' ? "bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.6)]" : "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]",
+                    i === history.length - 1 ? "ring-2 ring-white/70 scale-125" : "opacity-75"
                   )} 
                 />
               ))
             )}
           </div>
         </div>
-        <div className="bg-[#1a1b26] border border-white/10 rounded-lg px-3 py-1 flex flex-col items-center shadow-lg">
-          <span className="text-[9px] text-[var(--color-tg-muted)] font-bold uppercase tracking-wider mb-0.5">Time Left</span>
-          <span className={cn("text-xl font-black tabular-nums leading-none", timeLeft <= 3 ? "text-red-500 animate-pulse" : "text-white")}>
+        <div className="bg-[#0B0F19]/90 border border-white/10 rounded-xl px-3.5 py-2 flex flex-col items-end">
+          <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider leading-none mb-1">Round Timer</span>
+          <span className={cn("text-xl font-mono-num font-extrabold leading-none", timeLeft <= 3 ? "text-rose-400 animate-pulse" : "text-white")}>
             00:{timeLeft.toString().padStart(2, '0')}
           </span>
         </div>
       </div>
 
-      {/* The Game Area - Changed from aspect-square to h-32/h-48 to save vertical space */}
-      <div className="w-full h-32 sm:h-48 rounded-2xl overflow-hidden flex relative shadow-2xl border-2 border-[#1a1b26] mb-3 bg-[#1a1b26] ring-2 ring-white/5">
+      {/* High-Craft Split Battle Arena */}
+      <div className="w-full h-44 sm:h-52 rounded-3xl overflow-hidden flex relative shadow-[0_16px_40px_rgba(0,0,0,0.65)] border border-white/15 bg-[#0B0F19]">
+        {/* Bears (Crimson Side) */}
         <div 
-          className="h-full bg-gradient-to-br from-red-400 to-red-600 transition-all duration-500 ease-out flex items-center justify-center relative shadow-[inset_0_0_50px_rgba(0,0,0,0.3)]"
+          className="h-full bg-gradient-to-br from-rose-950 via-rose-800 to-rose-600 transition-all duration-500 ease-out flex items-center justify-center relative overflow-hidden"
           style={{ width: `${redPercentage}%` }}
         >
-          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjIiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wNSkiLz48L3N2Zz4=')] opacity-50" />
-          <motion.img 
-            src="https://i.suar.me/5Pm59/l" 
-            alt="Bear" 
-            className="absolute inset-0 m-auto opacity-60 w-24 h-24 sm:w-32 sm:h-32 object-contain pointer-events-none drop-shadow-2xl"
-            animate={{ scale: Math.max(0.5, redPercentage / 50) }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
+          <img 
+            src={BEAR_MASCOT_IMG} 
+            alt="Bear Clan" 
+            referrerPolicy="no-referrer"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+            className="absolute inset-0 w-full h-full object-cover opacity-40 mix-blend-luminosity scale-105 pointer-events-none"
           />
-          {redPercentage > 15 && (
-            <motion.span 
-              key={redPercentage}
-              initial={{ scale: 1.2 }}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-rose-950/30 to-transparent pointer-events-none" />
+          {redPercentage > 14 && (
+            <motion.div 
+              key={Math.round(redPercentage)}
+              initial={{ scale: 1.1 }}
               animate={{ scale: 1 }}
-              className="text-white font-black text-3xl sm:text-4xl z-10 drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)] flex flex-col items-center"
+              className="z-10 flex flex-col items-center text-center px-2"
             >
-              {redPercentage.toFixed(0)}%
-            </motion.span>
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden border border-rose-400/50 shadow-lg mb-1 bg-rose-950">
+                <img src={BEAR_MASCOT_IMG} alt="Bear" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+              </div>
+              <span className="text-white font-mono-num font-extrabold text-2xl sm:text-3xl tracking-tight drop-shadow-md">
+                {redPercentage.toFixed(0)}%
+              </span>
+              <span className="text-[10px] font-bold text-rose-200 uppercase tracking-wider">Bears</span>
+            </motion.div>
           )}
         </div>
+
+        {/* Bulls (Emerald Side) */}
         <div 
-          className="h-full bg-gradient-to-br from-green-400 to-green-600 transition-all duration-500 ease-out flex items-center justify-center relative shadow-[inset_0_0_50px_rgba(0,0,0,0.3)]"
+          className="h-full bg-gradient-to-bl from-emerald-950 via-emerald-800 to-emerald-600 transition-all duration-500 ease-out flex items-center justify-center relative overflow-hidden border-l border-white/20"
           style={{ width: `${greenPercentage}%` }}
         >
-          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjIiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC4wNSkiLz48L3N2Zz4=')] opacity-50" />
-          <motion.img 
-            src="https://i.suar.me/ngz9E/l" 
-            alt="Bull" 
-            className="absolute inset-0 m-auto opacity-60 w-24 h-24 sm:w-32 sm:h-32 object-contain pointer-events-none drop-shadow-2xl"
-            animate={{ scale: Math.max(0.5, greenPercentage / 50) }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
+          <img 
+            src={BULL_MASCOT_IMG} 
+            alt="Bull Clan" 
+            referrerPolicy="no-referrer"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+            className="absolute inset-0 w-full h-full object-cover opacity-40 mix-blend-luminosity scale-105 pointer-events-none"
           />
-          {greenPercentage > 15 && (
-            <motion.span 
-              key={greenPercentage}
-              initial={{ scale: 1.2 }}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-emerald-950/30 to-transparent pointer-events-none" />
+          {greenPercentage > 14 && (
+            <motion.div 
+              key={Math.round(greenPercentage)}
+              initial={{ scale: 1.1 }}
               animate={{ scale: 1 }}
-              className="text-white font-black text-3xl sm:text-4xl z-10 drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)] flex flex-col items-center"
+              className="z-10 flex flex-col items-center text-center px-2"
             >
-              {greenPercentage.toFixed(0)}%
-            </motion.span>
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden border border-emerald-400/50 shadow-lg mb-1 bg-emerald-950">
+                <img src={BULL_MASCOT_IMG} alt="Bull" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+              </div>
+              <span className="text-white font-mono-num font-extrabold text-2xl sm:text-3xl tracking-tight drop-shadow-md">
+                {greenPercentage.toFixed(0)}%
+              </span>
+              <span className="text-[10px] font-bold text-emerald-200 uppercase tracking-wider">Bulls</span>
+            </motion.div>
           )}
         </div>
         
-        {/* VS Badge & Total Pool */}
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-10">
-          <div className="bg-[#1a1b26] text-white text-[10px] font-black px-3 py-1 rounded-full mb-1 border border-white/10 shadow-lg flex items-center gap-1">
-            <Globe className="w-3 h-3 text-indigo-400" />
-            {totalPool.toFixed(1)} <TonIcon className="w-3 h-3 inline-block" />
+        {/* Center Total Pool & VS Anchor */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center z-20 pointer-events-none">
+          <div className="bg-[#0B0F19]/95 text-white text-xs font-mono-num font-bold px-3 py-1 rounded-full mb-1.5 border border-white/15 shadow-xl flex items-center gap-1.5">
+            <span>Pool:</span>
+            <span className="text-sky-400 font-extrabold">{totalPool.toFixed(1)}</span>
+            <TonIcon className="w-3.5 h-3.5" />
           </div>
-          <div className="w-14 h-14 bg-[#1a1b26] rounded-full border-4 border-white/10 flex items-center justify-center shadow-2xl">
-            <span className="text-white font-black italic text-lg bg-clip-text text-transparent bg-gradient-to-br from-gray-100 to-gray-500">VS</span>
+          <div className="w-11 h-11 bg-[#0F1523] rounded-2xl border-2 border-white/20 flex items-center justify-center shadow-2xl rotate-45">
+            <span className="-rotate-45 text-white font-display font-black text-xs tracking-wider">VS</span>
           </div>
         </div>
 
@@ -1066,20 +1281,23 @@ const Game2Tab: React.FC<{ walletConnected: boolean, balance: number, setBalance
         <AnimatePresence>
           {gameState === 'finished' && (
             <motion.div 
-              initial={{ opacity: 0, scale: 0.8 }}
+              initial={{ opacity: 0, scale: 0.92 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 flex items-center justify-center z-20 bg-black/60 backdrop-blur-sm"
+              className="absolute inset-0 flex items-center justify-center z-30 bg-black/75 backdrop-blur-md"
             >
-              <div className={cn("p-8 rounded-3xl border-4 shadow-2xl text-center transform transition-transform", winner === 'red' ? "bg-red-500/20 border-red-500" : "bg-green-500/20 border-green-500")}>
-                <h3 className={cn("text-4xl font-black mb-2 drop-shadow-lg", winner === 'red' ? "text-red-400" : "text-green-400")}>
-                  {winner === 'red' ? 'RED WINS!' : 'GREEN WINS!'}
+              <div className={cn(
+                "px-7 py-5 rounded-3xl border shadow-2xl text-center",
+                winner === 'red' ? "bg-rose-950/90 border-rose-500/50" : "bg-emerald-950/90 border-emerald-500/50"
+              )}>
+                <h3 className={cn("text-2xl sm:text-3xl font-display font-extrabold mb-1", winner === 'red' ? "text-rose-400" : "text-emerald-400")}>
+                  {winner === 'red' ? 'BEARS TRIUMPH!' : 'BULLS TRIUMPH!'}
                 </h3>
                 {userBet && userBet.color === winner && (
-                  <p className="text-white font-bold text-xl">You Won!</p>
+                  <p className="text-white font-bold text-base">Victory! Payout credited to balance</p>
                 )}
                 {userBet && userBet.color !== winner && (
-                  <p className="text-white/70 font-bold text-xl">You Lost</p>
+                  <p className="text-slate-300 font-medium text-sm">Round ended · Next round starting</p>
                 )}
               </div>
             </motion.div>
@@ -1087,11 +1305,11 @@ const Game2Tab: React.FC<{ walletConnected: boolean, balance: number, setBalance
         </AnimatePresence>
       </div>
 
-      {/* Betting Controls */}
-      <div className="bg-white/5 rounded-2xl p-4 border border-white/10 mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <span className="text-sm font-medium text-[var(--color-tg-muted)]">Bet Amount</span>
-          <div className="flex items-center gap-2 bg-black/40 px-3 py-2 rounded-xl border border-white/10 focus-within:border-indigo-500 transition-colors">
+      {/* Betting Console */}
+      <div className="glass-card rounded-2xl p-4">
+        <div className="flex justify-between items-center mb-3">
+          <span className="text-xs font-semibold text-slate-300">Wager Amount (TON)</span>
+          <div className="flex items-center gap-2 bg-[#0B0F19] px-3 py-1.5 rounded-xl border border-white/10 focus-within:border-[#0098EA] transition-colors">
             <input 
               type="number" 
               min="0.1" 
@@ -1101,118 +1319,126 @@ const Game2Tab: React.FC<{ walletConnected: boolean, balance: number, setBalance
                 setBetInput(e.target.value);
                 localStorage.setItem('game2_bet_amount', e.target.value);
               }}
-              className="bg-transparent text-white font-black text-right w-24 outline-none"
+              className="bg-transparent text-white font-mono-num font-bold text-right w-20 outline-none text-base"
               placeholder="0.1"
             />
-            <TonIcon className="w-5 h-5" />
+            <TonIcon className="w-4 h-4" />
           </div>
         </div>
         
-        <div className="flex flex-wrap gap-2 mb-4">
+        <div className="grid grid-cols-5 gap-1.5 mb-4">
           {[0.1, 1, 5, 10, 25].map(amt => (
             <button
               key={amt}
               onClick={() => {
+                playSound('click');
                 setBetInput(amt.toString());
                 localStorage.setItem('game2_bet_amount', amt.toString());
               }}
               className={cn(
-                "flex-1 min-w-[40px] py-2 rounded-lg font-bold text-sm transition-all",
-                parseFloat(betInput) === amt ? "bg-[var(--color-game-accent)] text-white" : "bg-white/10 text-white hover:bg-white/20"
+                "py-2 rounded-xl font-mono-num font-bold text-xs transition-all border",
+                parseFloat(betInput) === amt
+                  ? "bg-[#0098EA] text-white border-sky-400 shadow-sm"
+                  : "bg-white/[0.04] text-slate-300 border-white/[0.06] hover:bg-white/[0.08]"
               )}
             >
-              {amt}
+              {amt} TON
             </button>
           ))}
         </div>
 
-        <div className="flex gap-4">
-          <div className="flex-1 flex flex-col gap-2">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1.5">
             <button 
               onClick={() => handleBet('red', buyAmount)} 
-              disabled={gameState !== 'waiting' || userBet !== null || !walletConnected}
-              className="w-full py-4 bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl font-bold text-white shadow-lg shadow-red-500/20 transition-all active:scale-95 flex flex-col items-center justify-center gap-1"
+              disabled={gameState !== 'waiting' || userBet !== null}
+              className="w-full py-3 px-3 bg-gradient-to-b from-rose-500 to-rose-700 hover:from-rose-400 hover:to-rose-600 disabled:opacity-45 disabled:cursor-not-allowed rounded-2xl font-bold text-white shadow-lg shadow-rose-900/30 transition-all active:scale-[0.98] flex items-center justify-center gap-2.5 border border-rose-400/30"
             >
-              <img src="https://i.suar.me/5Pm59/l" alt="Bear" className="w-6 h-6 object-contain" />
-              <span>Bet Bears</span>
+              <img src={BEAR_MASCOT_IMG} alt="Bear" referrerPolicy="no-referrer" className="w-7 h-7 rounded-lg object-cover border border-white/20" />
+              <span className="text-sm font-display font-bold">Join Bears</span>
             </button>
-            <div className="text-center text-sm font-bold text-red-400 flex items-center justify-center gap-1">{redTotal.toFixed(1)} <TonIcon className="w-3 h-3 inline-block" /></div>
+            <div className="text-center text-xs font-mono-num font-semibold text-rose-400 flex items-center justify-center gap-1">
+              <span>{redTotal.toFixed(1)}</span> <TonIcon className="w-3 h-3" />
+              <span className="text-slate-500">·</span>
+              <span className="text-slate-400">{redPool.length + (userBet?.color === 'red' ? 1 : 0)} players</span>
+            </div>
           </div>
-          <div className="flex-1 flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5">
             <button 
               onClick={() => handleBet('green', buyAmount)} 
-              disabled={gameState !== 'waiting' || userBet !== null || !walletConnected}
-              className="w-full py-4 bg-green-500 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl font-bold text-white shadow-lg shadow-green-500/20 transition-all active:scale-95 flex flex-col items-center justify-center gap-1"
+              disabled={gameState !== 'waiting' || userBet !== null}
+              className="w-full py-3 px-3 bg-gradient-to-b from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 disabled:opacity-45 disabled:cursor-not-allowed rounded-2xl font-bold text-white shadow-lg shadow-emerald-900/30 transition-all active:scale-[0.98] flex items-center justify-center gap-2.5 border border-emerald-400/30"
             >
-              <img src="https://i.suar.me/ngz9E/l" alt="Bull" className="w-6 h-6 object-contain" />
-              <span>Bet Bulls</span>
+              <img src={BULL_MASCOT_IMG} alt="Bull" referrerPolicy="no-referrer" className="w-7 h-7 rounded-lg object-cover border border-white/20" />
+              <span className="text-sm font-display font-bold">Join Bulls</span>
             </button>
-            <div className="text-center text-sm font-bold text-green-400 flex items-center justify-center gap-1">{greenTotal.toFixed(1)} <TonIcon className="w-3 h-3 inline-block" /></div>
+            <div className="text-center text-xs font-mono-num font-semibold text-emerald-400 flex items-center justify-center gap-1">
+              <span>{greenTotal.toFixed(1)}</span> <TonIcon className="w-3 h-3" />
+              <span className="text-slate-500">·</span>
+              <span className="text-slate-400">{greenPool.length + (userBet?.color === 'green' ? 1 : 0)} players</span>
+            </div>
           </div>
         </div>
-        {!walletConnected && (
-          <p className="text-center text-xs text-red-400 mt-4 font-medium">Please connect your wallet to play</p>
-        )}
       </div>
 
-      {/* Participants List */}
-      <div className="flex gap-2 sm:gap-4">
-        <div className="flex-1 min-w-0 bg-[#1a1b26] rounded-2xl p-2 sm:p-3 border border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.05)] flex flex-col h-64">
-          <div className="flex justify-between items-center mb-3 pb-2 border-b border-red-500/20">
-            <h4 className="text-red-400 font-black text-xs sm:text-sm flex items-center gap-1 sm:gap-2 truncate pr-1">
-              <img src="https://i.suar.me/5Pm59/l" alt="Bear" className="w-4 h-4 sm:w-5 sm:h-5 object-contain drop-shadow-md flex-shrink-0" />
-              <span className="truncate">BEARS</span>
+      {/* Live Faction Rosters */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="glass-card rounded-2xl p-3 border-rose-500/20 flex flex-col h-56">
+          <div className="flex justify-between items-center mb-2 pb-2 border-b border-white/[0.07]">
+            <h4 className="text-rose-400 font-display font-bold text-xs flex items-center gap-1.5 truncate">
+              <img src={BEAR_MASCOT_IMG} alt="Bear" referrerPolicy="no-referrer" className="w-4 h-4 rounded object-cover shrink-0" />
+              <span>Bears Roster</span>
             </h4>
-            <span className="text-[10px] sm:text-xs font-bold text-red-500/50 flex-shrink-0">{redPool.length + (userBet?.color === 'red' ? 1 : 0)} <span className="hidden sm:inline">Players</span></span>
+            <span className="text-[11px] font-mono-num font-semibold text-slate-400">{redPool.length + (userBet?.color === 'red' ? 1 : 0)}</span>
           </div>
           <div className="flex-1 overflow-y-auto custom-scrollbar pr-1">
             {userBet?.color === 'red' && (
-              <div className="flex justify-between items-center p-2 bg-red-500/20 rounded-lg mb-2 border border-red-500/40 shadow-sm">
-                <span className="font-black text-xs text-white">{username}</span>
-                <span className="font-black text-xs text-red-300 flex items-center gap-1">{userBet.amount} <TonIcon className="w-3 h-3 inline-block" /></span>
+              <div className="flex justify-between items-center p-2 bg-rose-500/20 rounded-xl mb-1.5 border border-rose-500/40">
+                <span className="font-bold text-xs text-white truncate">{username}</span>
+                <span className="font-mono-num font-bold text-xs text-rose-300 flex items-center gap-1">{userBet.amount} <TonIcon className="w-3 h-3" /></span>
               </div>
             )}
             <AnimatePresence initial={false}>
-              {redPool.slice(0, 30).map(p => (
+              {redPool.slice(0, 25).map(p => (
                 <motion.div 
                   key={p.id} 
-                  initial={{ opacity: 0, x: -20, height: 0 }}
-                  animate={{ opacity: 1, x: 0, height: 'auto' }}
-                  className="flex justify-between items-center p-2 border-b border-red-500/10 last:border-0"
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex justify-between items-center py-1.5 px-1 border-b border-white/[0.04] last:border-0"
                 >
-                  <span className="font-medium text-xs text-white/70 truncate pr-2">{p.name}</span>
-                  <span className="font-bold text-xs text-red-400 whitespace-nowrap flex items-center gap-1">{p.amount} <TonIcon className="w-3 h-3 inline-block" /></span>
+                  <span className="font-medium text-xs text-slate-300 truncate pr-2">{p.name}</span>
+                  <span className="font-mono-num font-semibold text-xs text-rose-400 whitespace-nowrap flex items-center gap-1">{p.amount} <TonIcon className="w-3 h-3" /></span>
                 </motion.div>
               ))}
             </AnimatePresence>
           </div>
         </div>
 
-        <div className="flex-1 min-w-0 bg-[#1a1b26] rounded-xl p-2 border border-green-500/20 shadow-[0_0_15px_rgba(34,197,94,0.05)] flex flex-col h-40 sm:h-48">
-          <div className="flex justify-between items-center mb-3 pb-2 border-b border-green-500/20">
-            <h4 className="text-green-400 font-black text-xs sm:text-sm flex items-center gap-1 sm:gap-2 truncate pr-1">
-              <img src="https://i.suar.me/ngz9E/l" alt="Bull" className="w-4 h-4 sm:w-5 sm:h-5 object-contain drop-shadow-md flex-shrink-0" />
-              <span className="truncate">BULLS</span>
+        <div className="glass-card rounded-2xl p-3 border-emerald-500/20 flex flex-col h-56">
+          <div className="flex justify-between items-center mb-2 pb-2 border-b border-white/[0.07]">
+            <h4 className="text-emerald-400 font-display font-bold text-xs flex items-center gap-1.5 truncate">
+              <img src={BULL_MASCOT_IMG} alt="Bull" referrerPolicy="no-referrer" className="w-4 h-4 rounded object-cover shrink-0" />
+              <span>Bulls Roster</span>
             </h4>
-            <span className="text-[10px] sm:text-xs font-bold text-green-500/50 flex-shrink-0">{greenPool.length + (userBet?.color === 'green' ? 1 : 0)} <span className="hidden sm:inline">Players</span></span>
+            <span className="text-[11px] font-mono-num font-semibold text-slate-400">{greenPool.length + (userBet?.color === 'green' ? 1 : 0)}</span>
           </div>
           <div className="flex-1 overflow-y-auto custom-scrollbar pr-1">
             {userBet?.color === 'green' && (
-              <div className="flex justify-between items-center p-2 bg-green-500/20 rounded-lg mb-2 border border-green-500/40 shadow-sm">
-                <span className="font-black text-xs text-white">{username}</span>
-                <span className="font-black text-xs text-green-300 flex items-center gap-1">{userBet.amount} <TonIcon className="w-3 h-3 inline-block" /></span>
+              <div className="flex justify-between items-center p-2 bg-emerald-500/20 rounded-xl mb-1.5 border border-emerald-500/40">
+                <span className="font-bold text-xs text-white truncate">{username}</span>
+                <span className="font-mono-num font-bold text-xs text-emerald-300 flex items-center gap-1">{userBet.amount} <TonIcon className="w-3 h-3" /></span>
               </div>
             )}
             <AnimatePresence initial={false}>
-              {greenPool.slice(0, 30).map(p => (
+              {greenPool.slice(0, 25).map(p => (
                 <motion.div 
                   key={p.id} 
-                  initial={{ opacity: 0, x: 20, height: 0 }}
-                  animate={{ opacity: 1, x: 0, height: 'auto' }}
-                  className="flex justify-between items-center p-2 border-b border-green-500/10 last:border-0"
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex justify-between items-center py-1.5 px-1 border-b border-white/[0.04] last:border-0"
                 >
-                  <span className="font-medium text-xs text-white/70 truncate pr-2">{p.name}</span>
-                  <span className="font-bold text-xs text-green-400 whitespace-nowrap flex items-center gap-1">{p.amount} <TonIcon className="w-3 h-3 inline-block" /></span>
+                  <span className="font-medium text-xs text-slate-300 truncate pr-2">{p.name}</span>
+                  <span className="font-mono-num font-semibold text-xs text-emerald-400 whitespace-nowrap flex items-center gap-1">{p.amount} <TonIcon className="w-3 h-3" /></span>
                 </motion.div>
               ))}
             </AnimatePresence>
@@ -1223,7 +1449,7 @@ const Game2Tab: React.FC<{ walletConnected: boolean, balance: number, setBalance
   );
 };
 
-const GameTab: React.FC<{ walletConnected: boolean, balance: number, setBalance: React.Dispatch<React.SetStateAction<number>>, username: string, t: any }> = ({ walletConnected, balance, setBalance, username, t }) => {
+const GameTab: React.FC<{ walletConnected: boolean, balance: number, setBalance: React.Dispatch<React.SetStateAction<number>>, username: string, t: any, onInsufficientBalance: (needed: number) => void }> = ({ balance, setBalance, username, t, onInsufficientBalance }) => {
   // Load initial state from localStorage if available
   const [gameState, setGameState] = useState<GameState>(() => (localStorage.getItem('tq_gameState') as GameState) || 'waiting');
   const [timeLeft, setTimeLeft] = useState(() => parseInt(localStorage.getItem('tq_timeLeft') || String(WAITING_DURATION)));
@@ -1406,20 +1632,16 @@ const GameTab: React.FC<{ walletConnected: boolean, balance: number, setBalance:
   }, [gameState]); // Removed participants.length from deps to avoid resetting timer
 
   const handleBuy = () => {
-    playSound('click');
     if (buyAmount < MIN_BUY_IN) {
-      alert(`${t('minDeposit1')}`);
+      onInsufficientBalance(MIN_BUY_IN);
       return;
     }
     if (balance < buyAmount) {
-      if (!walletConnected) {
-        alert(t('connectWalletFirst'));
-      } else {
-        alert(t('txFailed'));
-      }
+      onInsufficientBalance(buyAmount);
       return;
     }
-    
+    playSound('click');
+    triggerHaptic('medium');
     setBalance(balance - buyAmount);
     setParticipants(prev => {
       const existing = prev.find(p => p.id === 'user');
@@ -1576,221 +1798,149 @@ const GameTab: React.FC<{ walletConnected: boolean, balance: number, setBalance:
   };
 
   return (
-    <div className="p-4 flex flex-col gap-4">
-      {/* Recent Winners Ticker */}
-      <div className="bg-black/20 rounded-full overflow-hidden flex items-center px-3 py-1.5 border border-white/5">
-        <span className="text-[10px] font-bold text-[var(--color-game-accent)] uppercase tracking-wider mr-2 whitespace-nowrap">Live Wins:</span>
-        <div className="flex-1 overflow-hidden relative h-4">
-          <motion.div 
-            animate={{ x: [200, -300] }}
-            transition={{ repeat: Infinity, duration: 10, ease: "linear" }}
-            className="absolute whitespace-nowrap text-xs font-bold text-white/80 flex items-center gap-2"
-          >
-            {recentWins.map((w, i) => (
-              <span key={i} className="flex items-center gap-1">
-                {w.text.split(' TON ')[0]} <TonIcon className="w-3 h-3 inline-block" /> {w.text.split(' TON ')[1]}
-                {i < recentWins.length - 1 && <span className="mx-1">•</span>}
-              </span>
-            ))}
-          </motion.div>
-        </div>
-      </div>
+    <div className="p-4 flex flex-col gap-4 max-w-xl mx-auto w-full">
+      {/* Minimalist Donut Wheel with Integrated Center Telemetry */}
+      <div className="glass-card rounded-3xl p-6 flex flex-col items-center relative overflow-hidden">
+        <div className="relative w-64 h-64 sm:w-72 sm:h-72 rounded-full p-3 bg-[#090C12] border border-white/[0.08] shadow-inner flex items-center justify-center">
+          {/* Conic Gradient Wheel Ring */}
+          <div 
+            className="w-full h-full rounded-full transition-all duration-500 relative overflow-hidden"
+            style={{
+              background: participantsWithPercentages.length > 0 
+                ? `conic-gradient(${participantsWithPercentages.reduce((acc, p, i, arr) => {
+                    const prevTotal = arr.slice(0, i).reduce((sum, prev) => sum + prev.percentage!, 0);
+                    const currentTotal = prevTotal + p.percentage!;
+                    return acc + `${p.color} ${prevTotal}% ${currentTotal}%${i === arr.length - 1 ? '' : ', '}`;
+                  }, '')})`
+                : 'rgba(255,255,255,0.03)'
+            }}
+          />
 
-      {/* Game Stats */}
-      <div className="flex justify-between items-center bg-[var(--color-game-card)] p-4 rounded-2xl cartoon-border">
-        <div className="flex flex-col">
-          <span className="text-[var(--color-tg-muted)] text-xs uppercase tracking-wider font-bold">Total Pool</span>
-          <span className="text-2xl font-bold text-white flex items-center gap-1 text-stroke">
-            {totalPool.toFixed(2)} <TonIcon className="w-5 h-5" />
-          </span>
-        </div>
-        <div className="flex flex-col items-end">
-          <span className="text-[var(--color-tg-muted)] text-xs uppercase tracking-wider font-bold">
-            {gameState === 'waiting' ? t('gameStartsIn') : gameState === 'playing' ? t('playing') : t('winnerIs')}
-          </span>
-          <span className={cn("text-3xl font-bold text-stroke", timeLeft <= 3 && gameState === 'waiting' ? "text-[var(--color-game-primary)]" : "text-white")}>
-            00:{timeLeft.toString().padStart(2, '0')}
-          </span>
-        </div>
-      </div>
+          {/* Spinning Pointer */}
+          {(gameState === 'playing' || gameState === 'finished') && (
+            <MovingDot winner={winner} participants={participantsWithPercentages} />
+          )}
 
-      {/* The Square */}
-      <div className="relative w-full max-w-[280px] sm:max-w-[320px] mx-auto aspect-square bg-[#0f0f0f] rounded-full overflow-hidden cartoon-border shadow-2xl shadow-black/50 mb-4">
-        {/* Slices using conic-gradient */}
-        <div 
-          className="absolute inset-0 transition-all duration-500"
-          style={{
-            background: participantsWithPercentages.length > 0 
-              ? `conic-gradient(${participantsWithPercentages.reduce((acc, p, i, arr) => {
-                  const prevTotal = arr.slice(0, i).reduce((sum, prev) => sum + prev.percentage!, 0);
-                  const currentTotal = prevTotal + p.percentage!;
-                  return acc + `${p.color} ${prevTotal}% ${currentTotal}%${i === arr.length - 1 ? '' : ', '}`;
-                }, '')})`
-              : 'transparent'
-          }}
-        />
-        
-        {/* Slice Labels */}
-        <div className="absolute inset-0">
-          {participantsWithPercentages.map((p, i, arr) => {
-            if (p.percentage! < 5) return null; // Don't show label if slice is too small
-            const prevTotal = arr.slice(0, i).reduce((sum, prev) => sum + prev.percentage!, 0);
-            const middlePercentage = prevTotal + (p.percentage! / 2);
-            const angle = (middlePercentage / 100) * 360;
-            // Calculate position (radius = 35% from center)
-            const rad = (angle - 90) * (Math.PI / 180);
-            const x = 50 + 35 * Math.cos(rad);
-            const y = 50 + 35 * Math.sin(rad);
-            
-            return (
-              <div 
-                key={`label-${p.id}-${i}`}
-                className="absolute transform -translate-x-1/2 -translate-y-1/2 text-white font-bold text-xs text-stroke text-center leading-tight"
-                style={{ left: `${x}%`, top: `${y}%` }}
-              >
-                <div>{p.name}</div>
-                <div className="text-[10px] opacity-80">{p.percentage?.toFixed(1)}%</div>
-              </div>
-            );
-          })}
-        </div>
-        
-        {participants.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center text-[var(--color-tg-muted)] text-sm font-bold bg-[var(--color-game-card)]">
-            {t('waitingForPlayers')}
+          {/* Hollow Center Hub with Live Pool & Timer */}
+          <div className="absolute inset-9 sm:inset-10 rounded-full bg-[#090C12] border border-white/10 flex flex-col items-center justify-center text-center z-20 px-3 shadow-2xl">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+              {gameState === 'waiting' ? t('gameStartsIn') : gameState === 'playing' ? t('playing') : t('winnerIs')}
+            </span>
+            <span className={cn("text-2xl sm:text-3xl font-mono-num font-bold mt-0.5", timeLeft <= 3 && gameState === 'waiting' ? "text-rose-400 animate-pulse" : "text-white")}>
+              00:{timeLeft.toString().padStart(2, '0')}
+            </span>
+            <div className="h-px w-12 bg-white/10 my-2" />
+            <div className="flex items-center gap-1 text-base font-mono-num font-bold text-[#0098EA]">
+              <span>{totalPool.toFixed(2)}</span>
+              <TonIcon className="w-4 h-4" />
+            </div>
+            <span className="text-[10px] text-slate-500 mt-0.5">{participants.length} {t('participants')}</span>
           </div>
-        )}
 
-        {/* Moving Dot */}
-        {(gameState === 'playing' || gameState === 'finished') && (
-          <MovingDot winner={winner} participants={participantsWithPercentages} />
-        )}
-
-        {/* Winner Overlay */}
-        <AnimatePresence>
-          {gameState === 'finished' && winner && (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="absolute inset-0 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center z-20"
-            >
+          {/* Winner Overlay */}
+          <AnimatePresence>
+            {gameState === 'finished' && winner && (
               <motion.div 
-                initial={{ y: 20 }}
-                animate={{ y: 0 }}
-                className="text-center"
+                initial={{ opacity: 0, scale: 0.92 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 rounded-full bg-[#090C12]/95 backdrop-blur-md flex flex-col items-center justify-center z-30 p-6 text-center"
               >
-                <div className="text-5xl mb-4">🎉</div>
-                <h3 className="text-2xl font-bold text-white mb-2">{winner.name} Won!</h3>
-                <p className="text-[var(--color-tg-blue)] font-bold text-xl flex items-center justify-center gap-1">
-                  +{(totalPool * (1 - HOUSE_EDGE)).toFixed(2)} <TonIcon className="w-5 h-5" />
-                </p>
-                <p className="text-[var(--color-tg-muted)] text-xs mt-2 flex items-center justify-center gap-1">
-                  (3% House Fee: {(totalPool * HOUSE_EDGE).toFixed(2)} <TonIcon className="w-3 h-3" />)
+                <Trophy size={28} className="text-amber-400 mb-2" />
+                <h3 className="text-lg font-display font-bold text-white truncate max-w-full">{winner.name}</h3>
+                <p className="text-emerald-400 font-mono-num font-bold text-xl flex items-center justify-center gap-1 mt-1">
+                  +{(totalPool * (1 - HOUSE_EDGE)).toFixed(2)} <TonIcon className="w-4 h-4" />
                 </p>
               </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
-      {/* Controls */}
-      <div className="bg-[var(--color-game-card)] p-4 rounded-2xl cartoon-border flex flex-col gap-4">
+      {/* Minimalist Buy-In Controls */}
+      <div className="glass-card p-4 rounded-2xl flex flex-col gap-3">
         {gameState === 'waiting' ? (
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-[var(--color-tg-muted)] text-xs font-bold uppercase tracking-wider text-center">{t('buyInAmount')}</label>
-              <div className="flex items-center justify-between gap-2 bg-black/30 rounded-xl p-1 cartoon-border">
-                <button onClick={() => { playSound('click'); setBuyAmount(Math.max(MIN_BUY_IN, Number((buyAmount - 0.1).toFixed(1)))) }} className="w-10 h-10 flex items-center justify-center text-white/50 hover:text-white font-bold text-2xl">-</button>
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-slate-400">{t('buyInAmount')}</span>
+              <div className="flex items-center gap-1.5 bg-[#090C12] rounded-xl p-1 border border-white/[0.08]">
+                <button
+                  onClick={() => { playSound('click'); setBuyAmount(Math.max(MIN_BUY_IN, Number((buyAmount - 0.5).toFixed(1)))); }}
+                  className="w-8 h-8 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-slate-300 font-bold"
+                >
+                  -
+                </button>
                 <input 
                   type="number" 
                   step="0.1"
                   min={MIN_BUY_IN}
                   value={buyAmount}
                   onChange={(e) => setBuyAmount(Number(e.target.value))}
-                  className="flex-1 bg-transparent text-center font-bold text-xl text-white outline-none w-full"
+                  className="w-16 bg-transparent text-center font-mono-num font-bold text-sm text-white outline-none"
                 />
-                <button onClick={() => { playSound('click'); setBuyAmount(Number((buyAmount + 0.1).toFixed(1))) }} className="w-10 h-10 flex items-center justify-center text-white/50 hover:text-white font-bold text-2xl">+</button>
+                <button
+                  onClick={() => { playSound('click'); setBuyAmount(Number((buyAmount + 0.5).toFixed(1))); }}
+                  className="w-8 h-8 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-slate-300 font-bold"
+                >
+                  +
+                </button>
               </div>
             </div>
             <button 
               onClick={handleBuy}
-              className="w-full bg-gradient-to-b from-[var(--color-game-primary)] to-[var(--color-game-secondary)] text-white font-bold py-3 rounded-xl cartoon-button text-stroke text-lg animate-pulse-slow"
+              className="w-full bg-[#0098EA] hover:bg-[#0088D1] text-white font-semibold py-3 rounded-xl luxury-button text-sm"
             >
-              {t('buyIn')}
+              {t('buyIn')} · {buyAmount.toFixed(1)} TON
             </button>
-          </div>
-        ) : gameState === 'playing' ? (
-          <div className="py-4 flex flex-col items-center justify-center gap-2">
-            <Loader2 className="animate-spin text-[var(--color-game-accent)]" size={32} />
-            <p className="text-[var(--color-game-accent)] font-bold animate-pulse text-stroke">{t('playing')}</p>
-          </div>
+          </>
         ) : (
-          <div className="py-4 flex flex-col items-center justify-center gap-2">
-            <p className="text-white font-bold text-stroke">{t('waitingForPlayers')}</p>
+          <div className="py-2 flex items-center justify-center gap-2 text-slate-300 text-xs font-medium">
+            <Loader2 className="animate-spin text-[#0098EA]" size={16} />
+            <span>{gameState === 'playing' ? t('playing') : t('waitingForPlayers')}</span>
           </div>
         )}
       </div>
 
-      {/* Participants List */}
-      <div className="flex flex-col gap-2">
-        <h3 className="text-[var(--color-tg-muted)] text-sm font-bold uppercase tracking-wider px-2">{t('participants')}</h3>
-        <div className="bg-[var(--color-game-card)] rounded-2xl cartoon-border overflow-hidden">
-          {participantsWithPercentages.length === 0 ? (
-            <div className="p-6 text-center text-[var(--color-tg-muted)] text-sm font-bold">No players yet. Be the first!</div>
-          ) : (
-            [...participantsWithPercentages].sort((a, b) => b.amount - a.amount).map((p, i) => (
-              <div key={`${p.id}-${i}`} className={cn("flex items-center justify-between p-3", i !== participants.length - 1 && "border-b border-white/5")}>
-                <div className="flex items-center gap-3">
-                  <div className="w-4 h-4 rounded-full border-2 border-white/20" style={{ backgroundColor: p.color }} />
-                  <span className="font-bold text-sm">{p.name}</span>
+      {/* Clean Participants Table */}
+      <div className="glass-card rounded-2xl overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-white/[0.06] flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-slate-400">{t('participants')}</h3>
+          <span className="text-xs font-mono-num text-slate-500">{participants.length}</span>
+        </div>
+        {participantsWithPercentages.length === 0 ? (
+          <div className="p-6 text-center text-slate-500 text-xs">{t('waitingForPlayers')}</div>
+        ) : (
+          <div className="divide-y divide-white/[0.05] max-h-60 overflow-y-auto custom-scrollbar">
+            {[...participantsWithPercentages].sort((a, b) => b.amount - a.amount).map((p, i) => (
+              <div key={`${p.id}-${i}`} className="flex items-center justify-between px-4 py-2.5">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
+                  <span className="font-medium text-xs text-white truncate">{p.name}</span>
                 </div>
-                <div className="flex flex-col items-end">
-                  <span className="font-bold text-sm text-[var(--color-game-accent)] flex items-center gap-1">{p.amount.toFixed(1)} <TonIcon className="w-3 h-3" /></span>
-                  <span className="text-[10px] text-[var(--color-tg-muted)] font-bold">{p.percentage?.toFixed(1)}%</span>
+                <div className="flex items-center gap-3 shrink-0 font-mono-num text-xs">
+                  <span className="text-slate-400">{p.percentage?.toFixed(1)}%</span>
+                  <span className="font-semibold text-white flex items-center gap-1">{p.amount.toFixed(1)} <TonIcon className="w-3 h-3" /></span>
                 </div>
               </div>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Recent Wins */}
-      <div className="flex flex-col gap-2">
-        <h3 className="text-[var(--color-tg-muted)] text-sm font-bold uppercase tracking-wider px-2">Live Wins</h3>
-        <div className="bg-[var(--color-game-card)] rounded-2xl cartoon-border overflow-hidden flex flex-col">
-          <AnimatePresence initial={false}>
-            {recentWins.map((win, i) => (
-              <motion.div 
-                key={`${win.id}-${i}`}
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="p-3 border-b border-white/5 last:border-0 font-bold text-sm text-green-400 flex items-center gap-1"
-              >
-                {win.text.split(' TON ')[0]} <TonIcon className="w-3 h-3 inline-block" /> {win.text.split(' TON ')[1]}
-              </motion.div>
-            ))}
-          </AnimatePresence>
+      {/* Quiet Recent Winners Feed */}
+      <div className="glass-card rounded-2xl overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-white/[0.06]">
+          <h3 className="text-xs font-semibold text-slate-400">Recent Round Winners</h3>
         </div>
-      </div>
-
-      {/* Live Withdrawals */}
-      <div className="flex flex-col gap-2">
-        <h3 className="text-[var(--color-tg-muted)] text-sm font-bold uppercase tracking-wider px-2">{t('liveWithdrawals')}</h3>
-        <div className="bg-[var(--color-game-card)] rounded-2xl cartoon-border overflow-hidden flex flex-col">
-          <AnimatePresence initial={false}>
-            {recentWithdrawals.map((withdrawal, i) => (
-              <motion.div 
-                key={`${withdrawal.id}-${i}`}
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="p-3 border-b border-white/5 last:border-0 font-bold text-sm text-blue-400 flex items-center gap-1"
-              >
-                {withdrawal.text.split(' TON ')[0]} <TonIcon className="w-3 h-3 inline-block" /> {withdrawal.text.split(' TON ')[1]}
-              </motion.div>
-            ))}
-          </AnimatePresence>
+        <div className="divide-y divide-white/[0.05]">
+          {recentWins.slice(0, 3).map((win, i) => (
+            <div key={`${win.id}-${i}`} className="px-4 py-2.5 text-xs text-slate-300 flex items-center justify-between">
+              <span>{win.text.split(' won ')[0]}</span>
+              <span className="font-mono-num font-semibold text-emerald-400 flex items-center gap-1">
+                +{win.text.split(' won ')[1]?.replace(' TON 🏆', '')} <TonIcon className="w-3 h-3" />
+              </span>
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -1798,13 +1948,11 @@ const GameTab: React.FC<{ walletConnected: boolean, balance: number, setBalance:
 }
 
 function MovingDot({ winner, participants }: { winner: Participant | null, participants: Participant[] }) {
-  // Calculate final angle based on winner
   let finalAngle = 0;
   if (winner) {
     let accumulatedPercentage = 0;
     for (const p of participants) {
       if (p.id === winner.id) {
-        // Target the middle of the winner's slice (in degrees)
         const targetPercentage = accumulatedPercentage + (p.percentage! / 2);
         finalAngle = (targetPercentage / 100) * 360;
         break;
@@ -1813,25 +1961,18 @@ function MovingDot({ winner, participants }: { winner: Participant | null, parti
     }
   }
 
-  // We want the dot to spin around the center.
-  // We can animate the rotation of a container, and place the dot at the edge.
-  // Let's do 10 full rotations + the final angle.
   const totalRotation = (360 * 10) + finalAngle;
   
   return (
     <motion.div
-      className="absolute inset-0 z-10"
+      className="absolute inset-0 z-10 pointer-events-none"
       animate={{ rotate: totalRotation }}
       transition={{
         duration: GAME_DURATION,
-        ease: [0.2, 0.8, 0.3, 1], // Custom easing to slow down at the end
+        ease: [0.2, 0.8, 0.3, 1],
       }}
     >
-      {/* The actual dot placed at the top edge, so when rotated it traces a circle */}
-      <div className="absolute top-2 left-1/2 -translate-x-1/2 w-8 h-8 bg-white rounded-full shadow-[0_0_15px_rgba(255,255,255,1)] border-4 border-black z-20" />
-      
-      {/* A line connecting to center for visual effect */}
-      <div className="absolute top-6 bottom-1/2 left-1/2 w-[4px] -translate-x-1/2 bg-white/80 origin-bottom z-10" />
+      <div className="absolute top-1.5 left-1/2 -translate-x-1/2 w-4 h-4 bg-white rounded-full shadow-[0_0_12px_rgba(255,255,255,0.9)] border-2 border-[#090C12] z-20" />
     </motion.div>
   );
 }
@@ -1855,9 +1996,6 @@ const TasksTab: React.FC<{ t: any, balance: number, setBalance: React.Dispatch<R
   const [premiumAdsResetTime, setPremiumAdsResetTime] = useState(() => parseInt(localStorage.getItem('tq_premium_ads_reset_time') || '0'));
   const [premiumAdsNextTime, setPremiumAdsNextTime] = useState(() => parseInt(localStorage.getItem('tq_premium_ads_next_time') || '0'));
 
-  const [hasJoinedPepe, setHasJoinedPepe] = useState(() => localStorage.getItem('tq_joined_pepe') === 'true');
-  const [hasJoinedGift, setHasJoinedGift] = useState(() => localStorage.getItem('tq_joined_gift') === 'true');
-  
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -1898,11 +2036,21 @@ const TasksTab: React.FC<{ t: any, balance: number, setBalance: React.Dispatch<R
   const handleShare = () => {
     if (isSharing || verifyingShare) return;
     playSound('click');
-    const refLink = `https://t.me/TonQashBot/app?startapp=${userId}`;
-    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent('Join me on TonQash and win TON!')}`;
-    
-    // Open telegram share link
-    window.open(shareUrl, '_blank');
+    const refLink = `https://t.me/TonQashBot/app?startapp=ref_${userId}`;
+    const shareText = 'Join me on TonQash Mini App and earn real TON! 🚀';
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent(shareText)}`;
+
+    try {
+      if ((WebApp as any)?.openTelegramLink) {
+        (WebApp as any).openTelegramLink(shareUrl);
+      } else if (navigator.share) {
+        navigator.share({ title: 'TonQash', text: shareText, url: refLink }).catch(() => {});
+      } else {
+        navigator.clipboard.writeText(refLink);
+      }
+    } catch {
+      navigator.clipboard.writeText(refLink);
+    }
 
     setVerifyingShare(true);
     setShareStartTime(Date.now());
@@ -2058,30 +2206,6 @@ const TasksTab: React.FC<{ t: any, balance: number, setBalance: React.Dispatch<R
     }
   };
 
-  const handleJoinPepe = () => {
-    if (balance >= 1) {
-      playSound('win');
-      setBalance(balance - 1);
-      setHasJoinedPepe(true);
-      localStorage.setItem('tq_joined_pepe', 'true');
-      myConfetti({ particleCount: 50, spread: 60, origin: { y: 0.8 } });
-    } else {
-      alert('Insufficient balance');
-    }
-  };
-
-  const handleJoinGift = () => {
-    if (balance >= 0.5) {
-      playSound('win');
-      setBalance(balance - 0.5);
-      setHasJoinedGift(true);
-      localStorage.setItem('tq_joined_gift', 'true');
-      myConfetti({ particleCount: 50, spread: 60, origin: { y: 0.8 } });
-    } else {
-      alert('Insufficient balance');
-    }
-  };
-
   const formatTimeLeft = (targetDate: number) => {
     const diff = targetDate - now;
     if (diff <= 0) return 'Ended';
@@ -2100,443 +2224,1721 @@ const TasksTab: React.FC<{ t: any, balance: number, setBalance: React.Dispatch<R
     return `${h}:${m}:${s}`;
   };
 
-  const pepeEndDate = new Date('2026-05-30T00:00:00Z').getTime();
-  const giftEndDate = new Date('2026-05-09T00:00:00Z').getTime();
-  const startDate = new Date('2026-04-01T00:00:00Z').getTime();
-
-  const calculateParticipants = (start: number, end: number, minP: number, maxP: number) => {
-    const total = end - start;
-    const elapsed = now - start;
-    if (elapsed < 0) return minP;
-    if (elapsed > total) return maxP;
-    const progress = elapsed / total;
-    return Math.floor(minP + progress * (maxP - minP));
-  };
-
-  const pepeParticipants = calculateParticipants(startDate, pepeEndDate, 2034, 85000);
-  const giftParticipants = calculateParticipants(startDate, giftEndDate, 2034, 62000);
-
   return (
-    <div className="p-4 flex flex-col gap-4">
-      <h2 className="text-2xl font-bold text-stroke mb-2">{t('tasks')}</h2>
+    <div className="p-4 flex flex-col gap-3.5 max-w-xl mx-auto w-full">
+      <div className="px-1">
+        <h2 className="text-xl font-display font-bold text-white">{t('tasks')}</h2>
+        <p className="text-xs text-slate-400 mt-0.5">Complete daily missions to earn TON</p>
+      </div>
 
-      {/* Premium Subscription Task */}
-      <div className="bg-[var(--color-game-card)] rounded-2xl cartoon-border p-4 flex flex-col gap-3 relative overflow-hidden border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.2)]">
-        <div className="absolute top-0 right-0 bg-yellow-500 text-black text-[10px] font-bold px-3 py-1 rounded-bl-xl z-10 cartoon-border border-t-0 border-r-0 flex items-center gap-1">
-          <Star size={10} className="fill-black" /> PREMIUM
-        </div>
-        <div className="flex items-start gap-3 mt-2">
-          <div className="w-16 h-16 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-xl flex items-center justify-center shrink-0 shadow-lg cartoon-border">
-            <Crown size={32} className="text-white" />
-          </div>
-          <div className="flex-1">
-            <h3 className="font-bold text-white text-lg leading-tight">Weekly Premium</h3>
-            <p className="text-[var(--color-tg-muted)] text-xs mt-1">
-              {now < premiumSubEnd 
-                ? <span className="flex items-center gap-1">Watch 5 ads daily to earn 0.5 <TonIcon className="w-3 h-3 inline-block" />!</span> 
-                : <span className="flex items-center gap-1">Subscribe for 1 <TonIcon className="w-3 h-3 inline-block" /> to unlock daily 0.5 <TonIcon className="w-3 h-3 inline-block" /> rewards for a week!</span>}
-            </p>
+      {/* Weekly Premium Task */}
+      <div className="glass-card rounded-2xl p-4 flex flex-col gap-3 border border-amber-500/20">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-amber-500/15 border border-amber-500/30 rounded-xl flex items-center justify-center shrink-0">
+              <Crown size={22} className="text-amber-400" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-display font-bold text-white text-base">Weekly Premium</h3>
+                <span className="text-[10px] font-semibold text-amber-300">· 0.5 TON / day</span>
+              </div>
+              <p className="text-slate-400 text-xs mt-0.5">
+                {now < premiumSubEnd 
+                  ? "Watch 5 short ads daily to claim 0.5 TON" 
+                  : "Unlock 0.5 TON daily rewards for 7 days"}
+              </p>
+            </div>
           </div>
         </div>
 
         {now < premiumSubEnd ? (
           <>
-            <div className="flex items-center justify-between bg-black/20 rounded-xl p-2 cartoon-border">
-              <span className="text-[10px] font-bold text-[var(--color-tg-muted)] uppercase">Daily Progress</span>
-              <div className="flex items-center gap-1">
-                {[1, 2, 3, 4, 5].map(i => (
-                  <div key={i} className={cn("w-4 h-2 rounded-full transition-colors", i <= premiumAdsWatched ? "bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.5)]" : "bg-white/10")} />
-                ))}
-              </div>
-            </div>
-            
-            <div className="flex items-center justify-between px-1">
-              <span className="text-[10px] font-bold text-[var(--color-tg-muted)] uppercase">Sub Ends In</span>
-              <span className="text-xs font-bold text-yellow-400">{formatTimeLeft(premiumSubEnd)}</span>
+            <div className="flex items-center justify-between bg-[#090C12] rounded-xl px-3 py-2 border border-white/[0.06] text-xs">
+              <span className="text-slate-400">Progress · {formatTimeLeft(premiumSubEnd)} left</span>
+              <span className="font-mono-num font-bold text-amber-400">{premiumAdsWatched}/5</span>
             </div>
             
             {premiumAdsWatched >= 5 ? (
-              <button disabled className="w-full bg-black/30 text-[var(--color-tg-muted)] font-bold py-3 rounded-xl cartoon-border transition-colors">
+              <button disabled className="w-full bg-white/[0.04] text-slate-500 font-semibold text-xs py-3 rounded-xl">
                 {t('comeBackLater').replace('{t}', formatTimeLeftShort(premiumAdsResetTime))}
               </button>
             ) : now < premiumAdsNextTime ? (
-              <button disabled className="w-full bg-black/30 text-[var(--color-tg-muted)] font-bold py-3 rounded-xl cartoon-border transition-colors">
+              <button disabled className="w-full bg-white/[0.04] text-slate-500 font-semibold text-xs py-3 rounded-xl">
                 {t('waitSec').replace('{s}', Math.ceil((premiumAdsNextTime - now) / 1000).toString())}
               </button>
             ) : (
-              <button onClick={handleWatchPremiumAd} className="w-full bg-gradient-to-b from-yellow-500 to-yellow-700 text-white font-bold py-3 rounded-xl cartoon-button text-stroke transition-colors">
+              <button onClick={handleWatchPremiumAd} className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-3 rounded-xl luxury-button">
                 Watch Premium Ad
               </button>
             )}
           </>
         ) : (
-          <button onClick={handleSubscribePremium} className="w-full bg-gradient-to-b from-yellow-500 to-yellow-700 text-white font-bold py-3 rounded-xl cartoon-button text-stroke transition-colors flex items-center justify-center gap-2">
-            Subscribe for 1 <TonIcon className="w-5 h-5" />
+          <button onClick={handleSubscribePremium} className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs py-3 rounded-xl luxury-button flex items-center justify-center gap-1.5">
+            <span>Subscribe · 1</span> <TonIcon className="w-4 h-4" />
           </button>
         )}
       </div>
 
-      {/* Task 0: Adsgram */}
-      <div className="bg-[var(--color-game-card)] rounded-2xl cartoon-border p-4 flex flex-col gap-3 relative overflow-hidden">
-        <div className="flex items-start gap-3 mt-2">
-          <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shrink-0 shadow-lg cartoon-border">
-            <Tv size={32} className="text-white" />
+      {/* Watch Ads Task */}
+      <div className="glass-card rounded-2xl p-4 flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-sky-500/15 border border-sky-500/30 rounded-xl flex items-center justify-center shrink-0">
+            <Tv size={22} className="text-sky-400" />
           </div>
-          <div className="flex-1">
-            <h3 className="font-bold text-white text-lg leading-tight">{t('taskAdsTitle')}</h3>
-            <p className="text-[var(--color-tg-muted)] text-xs mt-1">{t('taskAdsDesc')}</p>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-display font-bold text-white text-base">{t('taskAdsTitle')}</h3>
+            <p className="text-slate-400 text-xs mt-0.5">{t('taskAdsDesc')}</p>
           </div>
+          <span className="text-xs font-mono-num font-semibold text-slate-400">{adsWatched}/30</span>
         </div>
 
-        <div className="flex items-center justify-between bg-black/20 rounded-xl p-2 cartoon-border">
-          <span className="text-[10px] font-bold text-[var(--color-tg-muted)] uppercase">{t('taskAdsProgress')}</span>
-          <div className="flex items-center gap-1">
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => (
-              <div key={i} className={cn("w-3 h-2 rounded-full transition-colors", i <= (adsWatched % 10 === 0 && adsWatched > 0 ? 10 : adsWatched % 10) ? "bg-indigo-400 shadow-[0_0_8px_rgba(129,140,248,0.5)]" : "bg-white/10")} />
-            ))}
-          </div>
-        </div>
-        
-        <div className="flex items-center justify-between px-1">
-          <span className="text-[10px] font-bold text-[var(--color-tg-muted)] uppercase">{t('taskAdsDaily')}</span>
-          <span className="text-xs font-bold text-indigo-400">{adsWatched}/30</span>
+        <div className="h-1.5 w-full bg-[#090C12] rounded-full overflow-hidden">
+          <div
+            className="h-full bg-[#0098EA] rounded-full transition-all duration-300"
+            style={{ width: `${((adsWatched % 10 === 0 && adsWatched > 0 ? 10 : adsWatched % 10) / 10) * 100}%` }}
+          />
         </div>
         
         {adsWatched >= 30 ? (
-          <button disabled className="w-full bg-black/30 text-[var(--color-tg-muted)] font-bold py-3 rounded-xl cartoon-border transition-colors">
+          <button disabled className="w-full bg-white/[0.04] text-slate-500 font-semibold text-xs py-3 rounded-xl">
             {t('comeBackLater').replace('{t}', formatTimeLeftShort(adsResetTime))}
           </button>
         ) : now < adsNextTime ? (
-          <button disabled className="w-full bg-black/30 text-[var(--color-tg-muted)] font-bold py-3 rounded-xl cartoon-border transition-colors">
+          <button disabled className="w-full bg-white/[0.04] text-slate-500 font-semibold text-xs py-3 rounded-xl">
             {t('waitSec').replace('{s}', Math.ceil((adsNextTime - now) / 1000).toString())}
           </button>
         ) : (
-          <button onClick={handleWatchAd} className="w-full bg-gradient-to-b from-indigo-500 to-indigo-700 text-white font-bold py-3 rounded-xl cartoon-button text-stroke transition-colors">
+          <button onClick={handleWatchAd} className="w-full bg-[#0098EA] hover:bg-[#0088D1] text-white font-semibold text-xs py-3 rounded-xl luxury-button">
             {t('taskAdsBtn')}
           </button>
         )}
       </div>
 
-      {/* Task 1: Share */}
-      <div className="bg-[var(--color-game-card)] rounded-2xl cartoon-border p-4 flex flex-col gap-3">
-        <div className="flex items-start gap-3">
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-xl flex items-center justify-center shrink-0 shadow-lg cartoon-border">
-            <Share2 size={24} className="text-white" />
+      {/* Share Task */}
+      <div className="glass-card rounded-2xl p-4 flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-emerald-500/15 border border-emerald-500/30 rounded-xl flex items-center justify-center shrink-0">
+            <Share2 size={20} className="text-emerald-400" />
           </div>
-          <div className="flex-1">
-            <h3 className="font-bold text-white text-lg leading-tight">{t('taskShareTitle')}</h3>
-            <p className="text-[var(--color-tg-muted)] text-xs mt-1">{t('taskShareDesc')}</p>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-display font-bold text-white text-base">{t('taskShareTitle')}</h3>
+            <p className="text-slate-400 text-xs mt-0.5">{t('taskShareDesc')}</p>
           </div>
-        </div>
-        
-        <div className="flex items-center justify-between bg-black/20 rounded-xl p-2 cartoon-border">
-          <span className="text-xs font-bold text-[var(--color-tg-muted)] uppercase">{t('taskShareProgress')}</span>
-          <div className="flex items-center gap-1">
-            {[1, 2, 3].map(i => (
-              <div key={i} className={cn("w-6 h-2 rounded-full transition-colors", i <= shareCount ? "bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]" : "bg-white/10")} />
-            ))}
-            <span className="text-xs font-bold ml-2">{shareCount}/3</span>
-          </div>
+          <span className="text-xs font-mono-num font-semibold text-emerald-400">{shareCount}/3</span>
         </div>
 
         {shareCooldownEnd > now ? (
-          <button disabled className="w-full bg-black/30 text-[var(--color-tg-muted)] font-bold py-3 rounded-xl cartoon-border transition-colors">
+          <button disabled className="w-full bg-white/[0.04] text-slate-500 font-semibold text-xs py-3 rounded-xl">
             {t('comeBackLater').replace('{t}', formatTimeLeftShort(shareCooldownEnd))}
           </button>
         ) : shareCount < 3 ? (
-          <button onClick={handleShare} disabled={isSharing || verifyingShare} className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 text-white font-bold py-3 rounded-xl cartoon-button text-stroke transition-colors">
+          <button onClick={handleShare} disabled={isSharing || verifyingShare} className="w-full bg-white/[0.08] hover:bg-white/[0.12] text-white font-semibold text-xs py-3 rounded-xl luxury-button">
             {verifyingShare ? "Verifying..." : t('taskShareBtn')}
           </button>
         ) : (
-          <button onClick={handleClaimShare} className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-xl cartoon-button text-stroke transition-colors animate-pulse-slow">
+          <button onClick={handleClaimShare} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-xs py-3 rounded-xl luxury-button">
             {t('taskClaimBtn')}
           </button>
         )}
       </div>
-
-      {/* Task 2: Plush Pepe */}
-      <div className="bg-[var(--color-game-card)] rounded-2xl cartoon-border p-4 flex flex-col gap-3 relative overflow-hidden">
-        <div className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl z-10 cartoon-border border-t-0 border-r-0">
-          {t('endsIn')}: {formatTimeLeft(pepeEndDate)}
-        </div>
-        <div className="absolute top-0 left-0 bg-black/50 text-white text-[10px] font-bold px-3 py-1 rounded-br-xl z-10 cartoon-border border-t-0 border-l-0 flex items-center gap-1">
-          <Users size={10} /> {pepeParticipants.toLocaleString()} {t('participants')}
-        </div>
-        <div className="flex items-start gap-3 mt-4">
-          <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 shadow-lg cartoon-border bg-black/50">
-            <img src="https://i.suar.me/Pp3JN/l" alt="Plush Pepe" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-          </div>
-          <div className="flex-1">
-            <h3 className="font-bold text-white text-lg leading-tight">{t('taskPepeTitle')}</h3>
-            <p className="text-[var(--color-tg-muted)] text-xs mt-1">{t('taskPepeDesc')}</p>
-          </div>
-        </div>
-        
-        {hasJoinedPepe ? (
-          <div className="w-full bg-black/30 text-green-400 font-bold py-3 rounded-xl cartoon-border text-center flex items-center justify-center gap-2">
-            <CheckCircle2 size={18} /> {t('joined')}
-          </div>
-        ) : (
-          <button onClick={handleJoinPepe} className="w-full bg-gradient-to-b from-purple-500 to-purple-700 text-white font-bold py-3 rounded-xl cartoon-button text-stroke transition-colors">
-            {t('taskPepeBtn')}
-          </button>
-        )}
-      </div>
-
-      {/* Task 3: Random Gift */}
-      <div className="bg-[var(--color-game-card)] rounded-2xl cartoon-border p-4 flex flex-col gap-3 relative overflow-hidden">
-        <div className="absolute top-0 right-0 bg-orange-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl z-10 cartoon-border border-t-0 border-r-0">
-          {t('endsIn')}: {formatTimeLeft(giftEndDate)}
-        </div>
-        <div className="absolute top-0 left-0 bg-black/50 text-white text-[10px] font-bold px-3 py-1 rounded-br-xl z-10 cartoon-border border-t-0 border-l-0 flex items-center gap-1">
-          <Users size={10} /> {giftParticipants.toLocaleString()} {t('participants')}
-        </div>
-        <div className="flex items-start gap-3 mt-4">
-          <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 shadow-lg cartoon-border bg-black/50">
-            <img src="https://i.suar.me/Ep433/l" alt="Random Gift" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-          </div>
-          <div className="flex-1">
-            <h3 className="font-bold text-white text-lg leading-tight">{t('taskGiftTitle')}</h3>
-            <p className="text-[var(--color-tg-muted)] text-xs mt-1">{t('taskGiftDesc')}</p>
-          </div>
-        </div>
-        
-        {hasJoinedGift ? (
-          <div className="w-full bg-black/30 text-green-400 font-bold py-3 rounded-xl cartoon-border text-center flex items-center justify-center gap-2">
-            <CheckCircle2 size={18} /> {t('joined')}
-          </div>
-        ) : (
-          <button onClick={handleJoinGift} className="w-full bg-gradient-to-b from-orange-400 to-orange-600 text-white font-bold py-3 rounded-xl cartoon-button text-stroke transition-colors">
-            {t('taskGiftBtn')}
-          </button>
-        )}
-      </div>
     </div>
   );
 }
 
-const ReferralsTab: React.FC<{ t: any, userId: string }> = ({ t, userId }) => {
-  const [copied, setCopied] = useState(false);
-  const [referrals, setReferrals] = useState(0);
-  const [earned, setEarned] = useState(0);
+interface InvitedFriendRecord {
+  id: string;
+  username: string;
+  firstName: string;
+  lastName?: string;
+  photoUrl?: string;
+  isPremium: boolean;
+  gamesPlayed: number;
+  totalWagered: number;
+  joinedAt: string;
+  lastActiveAt: string;
+  rewardGenerated: number;
+}
+
+interface ReferralEventRecord {
+  id: string;
+  timestamp: string;
+  referrerId: string;
+  referredUserId: string;
+  referredUsername: string;
+  referredFirstName: string;
+  referredPhotoUrl?: string;
+  type: 'SIGNUP_BONUS' | 'PREMIUM_SIGNUP_BONUS' | 'WAGER_COMMISSION' | 'MILESTONE_BONUS' | 'CLAIM_PAYOUT';
+  amount: number;
+  details: string;
+}
+
+interface LeaderboardEntry {
+  id: string;
+  username: string;
+  firstName: string;
+  photoUrl?: string;
+  referralsCount: number;
+  referralEarnings: number;
+  tierName: string;
+}
+
+const ReferralsTab: React.FC<{
+  t: any;
+  userId: string;
+  balance: number;
+  setBalance: React.Dispatch<React.SetStateAction<number>>;
+  lang: Language;
+}> = ({ t, userId, setBalance, lang }) => {
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [activeSubTab, setActiveSubTab] = useState<'friends' | 'activity' | 'leaderboard'>('friends');
+  const [isLoadingRef, setIsLoadingRef] = useState(true);
+  const [isClaiming, setIsClaiming] = useState(false);
+  const [claimingMilestone, setClaimingMilestone] = useState<number | null>(null);
+
+  // Manual code bind state
+  const [inputCode, setInputCode] = useState('');
+  const [isBindingCode, setIsBindingCode] = useState(false);
+  const [feedbackBanner, setFeedbackBanner] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Server referral data
+  const [referralCode, setReferralCode] = useState(`ref_${userId}`);
+  const [referralsCount, setReferralsCount] = useState(() => parseInt(localStorage.getItem('portals_total_referrals') || '0'));
+  const [premiumCount, setPremiumCount] = useState(0);
+  const [totalEarned, setTotalEarned] = useState(() => parseFloat(localStorage.getItem('portals_earned_ton') || '0'));
+  const [claimableRewards, setClaimableRewards] = useState(0);
+  const [claimedMilestones, setClaimedMilestones] = useState<number[]>([]);
+  const [milestones, setMilestones] = useState<{ count: number; reward: number; label: string }[]>([
+    { count: 3, reward: 0.15, label: '3 Friends' },
+    { count: 10, reward: 0.50, label: '10 Friends' },
+    { count: 25, reward: 1.50, label: '25 Friends' },
+    { count: 50, reward: 3.50, label: '50 Friends' },
+  ]);
+  const [tier, setTier] = useState({
+    name: 'Starter',
+    rate: 0.10,
+    percentLabel: '10%',
+    nextTierName: 'Silver (12%)' as string | null,
+    nextTierTarget: 5,
+    progressPercent: 0,
+  });
+  const [referredByUser, setReferredByUser] = useState<{ id: string; username: string; firstName: string } | null>(null);
+  const [invitedUsers, setInvitedUsers] = useState<InvitedFriendRecord[]>([]);
+  const [events, setEvents] = useState<ReferralEventRecord[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+
+  const fetchReferralData = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const res = await fetch(`/api/referrals/${encodeURIComponent(userId)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setReferralCode(data.referralCode || `ref_${userId}`);
+        setReferralsCount(data.referralsCount || 0);
+        setPremiumCount(data.premiumReferralsCount || 0);
+        setTotalEarned(data.totalEarned || 0);
+        setClaimableRewards(data.claimableRewards || 0);
+        setClaimedMilestones(data.claimedMilestones || []);
+        if (Array.isArray(data.milestones) && data.milestones.length > 0) {
+          setMilestones(data.milestones);
+        }
+        if (data.tier) setTier(data.tier);
+        setReferredByUser(data.referredByUser || null);
+        setInvitedUsers(data.invitedUsers || []);
+        setEvents(data.events || []);
+        setLeaderboard(data.leaderboard || []);
+
+        localStorage.setItem('portals_total_referrals', String(data.referralsCount || 0));
+        localStorage.setItem('portals_earned_ton', String(data.totalEarned || 0));
+      }
+    } catch (err) {
+      console.error('Error fetching referrals:', err);
+    } finally {
+      setIsLoadingRef(false);
+    }
+  }, [userId]);
 
   useEffect(() => {
-    // Load real stats from local storage
-    const storedReferrals = parseInt(localStorage.getItem('portals_total_referrals') || '0');
-    const storedEarned = parseFloat(localStorage.getItem('portals_earned_ton') || '0');
-    setReferrals(storedReferrals);
-    setEarned(storedEarned);
-  }, []);
+    fetchReferralData();
+    const interval = setInterval(fetchReferralData, 10000);
+    return () => clearInterval(interval);
+  }, [fetchReferralData]);
 
-  const refLink = `https://t.me/TonQashBot/app?startapp=${userId}`;
+  const refLink = `https://t.me/TonQashBot/app?startapp=${referralCode}`;
 
-  const handleCopy = () => {
+  const handleCopyLink = () => {
+    playSound('click');
+    triggerHaptic('light');
     navigator.clipboard.writeText(refLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  const handleCopyCode = () => {
+    playSound('click');
+    triggerHaptic('light');
+    navigator.clipboard.writeText(referralCode);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  const handleNativeTelegramShare = () => {
+    playSound('click');
+    triggerHaptic('medium');
+    const shareText =
+      lang === 'ar'
+        ? 'انضم إليّ في تطبيق TonQash على تليجرام واربح عملة TON مجاناً! 🚀💎'
+        : lang === 'ru'
+        ? 'Присоединяйся ко мне в TonQash и зарабатывай TON! 🚀💎'
+        : 'Join me on TonQash Mini App and earn real TON! 🚀💎';
+
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(refLink)}&text=${encodeURIComponent(shareText)}`;
+
+    try {
+      if ((WebApp as any)?.openTelegramLink) {
+        (WebApp as any).openTelegramLink(shareUrl);
+      } else if (navigator.share) {
+        navigator.share({ title: 'TonQash', text: shareText, url: refLink }).catch(() => {});
+      } else {
+        handleCopyLink();
+      }
+    } catch {
+      handleCopyLink();
+    }
+  };
+
+  const handleClaimRewards = async () => {
+    if (claimableRewards <= 0 || isClaiming) return;
+    setIsClaiming(true);
+    playSound('click');
+    try {
+      const res = await fetch('/api/referrals/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        playSound('win');
+        triggerHaptic('heavy');
+        if (data.user && typeof data.user.balance === 'number') {
+          setBalance(data.user.balance);
+        }
+        myConfetti({ particleCount: 70, spread: 65, origin: { y: 0.7 } });
+        setFeedbackBanner({
+          type: 'success',
+          text:
+            lang === 'ar'
+              ? `تم تحويل +${Number(data.claimedAmount).toFixed(2)} TON إلى رصيد محفظتك بنجاح!`
+              : `Successfully claimed +${Number(data.claimedAmount).toFixed(2)} TON to your balance!`,
+        });
+        setTimeout(() => setFeedbackBanner(null), 4000);
+        fetchReferralData();
+      } else {
+        setFeedbackBanner({ type: 'error', text: data.error || 'Could not claim rewards' });
+        setTimeout(() => setFeedbackBanner(null), 3500);
+      }
+    } catch {
+      setFeedbackBanner({ type: 'error', text: 'Network error while claiming rewards' });
+      setTimeout(() => setFeedbackBanner(null), 3500);
+    } finally {
+      setIsClaiming(false);
+    }
+  };
+
+  const handleClaimMilestone = async (milestoneCount: number) => {
+    if (claimingMilestone !== null) return;
+    setClaimingMilestone(milestoneCount);
+    playSound('click');
+    try {
+      const res = await fetch('/api/referrals/claim-milestone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, milestoneCount }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        playSound('win');
+        triggerHaptic('heavy');
+        if (data.user && typeof data.user.balance === 'number') {
+          setBalance(data.user.balance);
+        }
+        myConfetti({ particleCount: 80, spread: 70, origin: { y: 0.7 } });
+        setFeedbackBanner({
+          type: 'success',
+          text:
+            lang === 'ar'
+              ? `مبارك! استلمت مكافأة الإنجاز +${Number(data.rewardAmount).toFixed(2)} TON!`
+              : `Milestone unlocked! +${Number(data.rewardAmount).toFixed(2)} TON added to your balance!`,
+        });
+        setTimeout(() => setFeedbackBanner(null), 4000);
+        fetchReferralData();
+      }
+    } catch {
+      // ignore
+    } finally {
+      setClaimingMilestone(null);
+    }
+  };
+
+  const handleBindCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputCode.trim() || isBindingCode) return;
+    setIsBindingCode(true);
+    playSound('click');
+    try {
+      const res = await fetch('/api/referrals/bind', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, refCode: inputCode.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        playSound('win');
+        triggerHaptic('heavy');
+        if (data.user && typeof data.user.balance === 'number') {
+          setBalance(data.user.balance);
+        }
+        localStorage.setItem('tonqash_referrer', data.referrer?.id || inputCode.trim());
+        setInputCode('');
+        myConfetti({ particleCount: 60, spread: 60, origin: { y: 0.75 } });
+        setFeedbackBanner({
+          type: 'success',
+          text:
+            lang === 'ar'
+              ? `تم ربط الدعوة بـ ${data.referrer?.username} وإضافة +${Number(data.inviteeBonus).toFixed(2)} TON لرصيدك!`
+              : `Linked to ${data.referrer?.username}! +${Number(data.inviteeBonus).toFixed(2)} TON welcome bonus added!`,
+        });
+        setTimeout(() => setFeedbackBanner(null), 4500);
+        fetchReferralData();
+      } else {
+        setFeedbackBanner({
+          type: 'error',
+          text: data.error || (lang === 'ar' ? 'كود الدعوة غير صالح' : 'Invalid invite code'),
+        });
+        setTimeout(() => setFeedbackBanner(null), 3500);
+      }
+    } catch {
+      setFeedbackBanner({ type: 'error', text: 'Connection error' });
+      setTimeout(() => setFeedbackBanner(null), 3500);
+    } finally {
+      setIsBindingCode(false);
+    }
   };
 
   return (
-    <div className="p-4 flex flex-col gap-6">
-      <div className="text-center py-6">
-        <div className="w-24 h-24 bg-gradient-to-br from-green-400 to-emerald-600 rounded-full mx-auto flex items-center justify-center mb-4 shadow-lg shadow-green-500/50 border-4 border-black/20 cartoon-border">
-          <Users size={48} className="text-white drop-shadow-md" />
+    <div className="p-4 flex flex-col gap-3.5 max-w-xl mx-auto w-full">
+      {/* Feedback Toast Banner */}
+      <AnimatePresence>
+        {feedbackBanner && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className={cn(
+              "px-4 py-3 rounded-2xl text-xs font-semibold flex items-center gap-2 border",
+              feedbackBanner.type === 'success'
+                ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300"
+                : "bg-rose-500/15 border-rose-500/30 text-rose-300"
+            )}
+          >
+            <CheckCircle2 size={16} className="shrink-0" />
+            <span>{feedbackBanner.text}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Hero Partner Card & Commission Tier */}
+      <div className="glass-card rounded-3xl p-5 flex flex-col gap-4 relative overflow-hidden">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-[#0098EA]/15 border border-[#0098EA]/30 rounded-2xl flex items-center justify-center shrink-0">
+              <Users size={24} className="text-[#0098EA]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-display font-bold text-white">{t('inviteFriends')}</h2>
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-[#0098EA]/15 text-[#38BDF8] border border-[#0098EA]/30">
+                  {tier.name} · {tier.percentLabel}
+                </span>
+              </div>
+              <p className="text-slate-400 text-xs mt-0.5 leading-relaxed">
+                {t('referralDesc')}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              playSound('click');
+              fetchReferralData();
+            }}
+            aria-label="Refresh referrals"
+            className="w-8 h-8 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-slate-400 hover:text-white transition-colors shrink-0"
+          >
+            <RefreshCw size={14} className={isLoadingRef ? "animate-spin text-[#0098EA]" : ""} />
+          </button>
         </div>
-        <h2 className="text-3xl font-bold mb-2 text-stroke">{t('inviteFriends')}</h2>
-        <p className="text-[var(--color-tg-muted)] text-sm max-w-[250px] mx-auto font-bold mb-4">
-          {t('referralDesc')}
-        </p>
-        <div className="bg-blue-500/20 border border-blue-500/50 rounded-xl p-3 max-w-[300px] mx-auto">
-          <p className="text-blue-300 text-xs font-bold leading-tight">
-            {t('betaNotice')}
-          </p>
+
+        {/* Reward Structure Highlights (Telegram Mini App Standard) */}
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-[#090C12] border border-white/[0.06] rounded-xl p-2.5 flex flex-col items-center text-center">
+            <span className="text-[10px] text-slate-400">{t('refStandardBonus')}</span>
+            <span className="text-xs font-mono-num font-bold text-white flex items-center gap-1 mt-1">
+              +0.05 <TonIcon className="w-3.5 h-3.5" />
+            </span>
+          </div>
+          <div className="bg-[#090C12] border border-amber-500/20 rounded-xl p-2.5 flex flex-col items-center text-center">
+            <span className="text-[10px] text-amber-300 flex items-center gap-0.5">
+              <Star size={10} className="fill-amber-400 text-amber-400" /> {t('refPremiumBonus')}
+            </span>
+            <span className="text-xs font-mono-num font-bold text-amber-400 flex items-center gap-1 mt-1">
+              +0.10 <TonIcon className="w-3.5 h-3.5" />
+            </span>
+          </div>
+          <div className="bg-[#090C12] border border-white/[0.06] rounded-xl p-2.5 flex flex-col items-center text-center">
+            <span className="text-[10px] text-slate-400">{t('refWagerCommission')}</span>
+            <span className="text-xs font-mono-num font-bold text-emerald-400 mt-1">
+              {tier.percentLabel} TON
+            </span>
+          </div>
+        </div>
+
+        {/* Tier Progression Bar */}
+        {tier.nextTierName && (
+          <div className="flex flex-col gap-1.5 pt-1">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-slate-400">
+                {lang === 'ar' ? `المستوى القادم: ${tier.nextTierName}` : `Next Tier: ${tier.nextTierName}`}
+              </span>
+              <span className="font-mono-num text-slate-300 font-semibold">
+                {referralsCount} / {tier.nextTierTarget}
+              </span>
+            </div>
+            <div className="h-1.5 w-full bg-[#090C12] rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[#0098EA] rounded-full transition-all duration-500"
+                style={{ width: `${tier.progressPercent}%` }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Real-Time Telemetry & Instant Claim Card */}
+      <div className="grid grid-cols-3 gap-2.5">
+        <div className="glass-card p-3.5 rounded-2xl flex flex-col justify-between">
+          <span className="text-slate-400 text-[11px]">{t('totalReferrals')}</span>
+          <div className="flex items-baseline justify-between mt-1">
+            <span className="text-xl font-mono-num font-bold text-white">{referralsCount}</span>
+            {premiumCount > 0 && (
+              <span className="text-[10px] font-mono-num text-amber-400 flex items-center gap-0.5">
+                <Star size={9} className="fill-amber-400" /> {premiumCount}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="glass-card p-3.5 rounded-2xl flex flex-col justify-between">
+          <span className="text-slate-400 text-[11px]">{t('earned')}</span>
+          <span className="text-xl font-mono-num font-bold text-white flex items-center gap-1 mt-1">
+            {totalEarned.toFixed(2)} <TonIcon className="w-4 h-4" />
+          </span>
+        </div>
+
+        <div className="glass-card p-3.5 rounded-2xl flex flex-col justify-between border border-emerald-500/20">
+          <span className="text-emerald-300/90 text-[11px]">{t('refClaimable')}</span>
+          <span className="text-xl font-mono-num font-bold text-emerald-400 flex items-center gap-1 mt-1">
+            {claimableRewards.toFixed(2)} <TonIcon className="w-4 h-4" />
+          </span>
         </div>
       </div>
 
-      <div className="bg-[var(--color-game-card)] p-4 rounded-2xl cartoon-border">
-        <h3 className="text-sm font-bold text-[var(--color-tg-muted)] mb-3 uppercase tracking-wider">{t('yourRefLink')}</h3>
+      {/* Claimable Rewards Action Button */}
+      {claimableRewards > 0 && (
+        <button
+          onClick={handleClaimRewards}
+          disabled={isClaiming}
+          className="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-3 rounded-2xl flex items-center justify-center gap-2 luxury-button text-xs shadow-lg"
+        >
+          {isClaiming ? (
+            <Loader2 size={16} className="animate-spin" />
+          ) : (
+            <>
+              <Sparkles size={16} />
+              <span>
+                {t('refClaimBtn')} (+{claimableRewards.toFixed(2)} TON)
+              </span>
+            </>
+          )}
+        </button>
+      )}
+
+      {/* Share & Invite Link Box */}
+      <div className="glass-card p-4 rounded-2xl flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-slate-400">{t('yourRefLink')}</span>
+          <button
+            onClick={handleCopyCode}
+            className="text-[11px] font-mono-num text-sky-400 hover:text-sky-300 flex items-center gap-1"
+          >
+            <span>Code: {referralCode}</span>
+            {copiedCode ? <CheckCircle2 size={12} className="text-emerald-400" /> : <Copy size={12} />}
+          </button>
+        </div>
+
         <div className="flex items-center gap-2">
-          <div className="flex-1 bg-black/30 rounded-xl p-3 text-sm font-mono text-white/80 overflow-hidden text-ellipsis whitespace-nowrap cartoon-border">
+          <div className="flex-1 bg-[#090C12] rounded-xl px-3.5 py-2.5 text-xs font-mono-num text-slate-300 overflow-hidden text-ellipsis whitespace-nowrap border border-white/[0.06]">
             {refLink}
           </div>
-          <button 
-            onClick={() => { playSound('click'); handleCopy(); }}
-            className="w-12 h-12 bg-gradient-to-b from-[var(--color-game-primary)] to-[var(--color-game-secondary)] rounded-xl flex items-center justify-center text-white transition-all cartoon-button"
+          <button
+            onClick={handleCopyLink}
+            aria-label="Copy referral link"
+            className="w-10 h-10 bg-white/[0.08] hover:bg-white/[0.12] rounded-xl flex items-center justify-center text-white transition-colors shrink-0"
           >
-            {copied ? <CheckCircle2 size={20} /> : <Copy size={20} />}
+            {copiedLink ? <CheckCircle2 size={17} className="text-emerald-400" /> : <Copy size={17} />}
+          </button>
+        </div>
+
+        <button
+          onClick={handleNativeTelegramShare}
+          className="w-full bg-[#0098EA] hover:bg-[#0088D1] text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 luxury-button text-xs"
+        >
+          <Share2 size={16} /> {t('shareLink')}
+        </button>
+      </div>
+
+      {/* Invite Milestones (3 / 10 / 25 / 50 Friends) */}
+      <div className="glass-card p-4 rounded-2xl flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold text-slate-300">{t('refMilestones')}</span>
+          <span className="text-[11px] font-mono-num text-slate-400">{referralsCount} / 50</span>
+        </div>
+        <div className="grid grid-cols-4 gap-2">
+          {milestones.map((m) => {
+            const isUnlocked = referralsCount >= m.count;
+            const isClaimed = claimedMilestones.includes(m.count);
+            return (
+              <div
+                key={m.count}
+                className={cn(
+                  "rounded-xl p-2.5 border flex flex-col items-center text-center gap-1 transition-all",
+                  isClaimed
+                    ? "bg-emerald-500/10 border-emerald-500/30"
+                    : isUnlocked
+                    ? "bg-[#0098EA]/15 border-[#0098EA] shadow-sm"
+                    : "bg-[#090C12] border-white/[0.06] opacity-75"
+                )}
+              >
+                <span className="text-[10px] font-semibold text-slate-300">
+                  {m.count} {lang === 'ar' ? 'أصدقاء' : 'Refs'}
+                </span>
+                <span className="text-xs font-mono-num font-bold text-white flex items-center gap-0.5">
+                  +{m.reward} <TonIcon className="w-3 h-3" />
+                </span>
+                {isClaimed ? (
+                  <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-0.5 mt-0.5">
+                    <CheckCircle2 size={11} /> {lang === 'ar' ? 'تم' : 'Claimed'}
+                  </span>
+                ) : isUnlocked ? (
+                  <button
+                    onClick={() => handleClaimMilestone(m.count)}
+                    disabled={claimingMilestone === m.count}
+                    className="mt-0.5 w-full py-1 rounded-lg bg-[#0098EA] hover:bg-[#0088D1] text-[10px] font-bold text-white"
+                  >
+                    {claimingMilestone === m.count ? '...' : lang === 'ar' ? 'استلام' : 'Claim'}
+                  </button>
+                ) : (
+                  <span className="text-[10px] font-mono-num text-slate-500 mt-0.5">
+                    {referralsCount}/{m.count}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Bind Friend's Invite Code (or show who invited you) */}
+      {referredByUser ? (
+        <div className="glass-card px-4 py-3 rounded-2xl flex items-center justify-between text-xs">
+          <span className="text-slate-400">{t('refInvitedBy')}</span>
+          <span className="font-semibold text-sky-400">{referredByUser.username}</span>
+        </div>
+      ) : (
+        <form onSubmit={handleBindCode} className="glass-card p-3.5 rounded-2xl flex flex-col gap-2">
+          <span className="text-xs font-medium text-slate-300">{t('refEnterCodeTitle')}</span>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={inputCode}
+              onChange={(e) => setInputCode(e.target.value)}
+              placeholder={t('refEnterCodePlaceholder')}
+              className="flex-1 bg-[#090C12] border border-white/[0.08] focus:border-[#0098EA] rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-500 outline-none"
+            />
+            <button
+              type="submit"
+              disabled={!inputCode.trim() || isBindingCode}
+              className="bg-white/[0.08] hover:bg-white/[0.14] disabled:opacity-50 text-white font-semibold px-3.5 py-2 rounded-xl text-xs whitespace-nowrap transition-colors"
+            >
+              {isBindingCode ? '...' : t('refApplyCode')}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Sub-Tabs for Invited Friends / Rewards Log / Leaderboard */}
+      <div className="glass-card rounded-2xl overflow-hidden">
+        <div className="grid grid-cols-3 gap-1 p-1.5 bg-[#090C12]/60 border-b border-white/[0.06]">
+          <button
+            onClick={() => { playSound('click'); setActiveSubTab('friends'); }}
+            className={cn(
+              "py-2 rounded-xl text-xs font-semibold transition-colors",
+              activeSubTab === 'friends' ? "bg-white/[0.1] text-white" : "text-slate-400 hover:text-white"
+            )}
+          >
+            {t('refInvitedList')} ({invitedUsers.length})
+          </button>
+          <button
+            onClick={() => { playSound('click'); setActiveSubTab('activity'); }}
+            className={cn(
+              "py-2 rounded-xl text-xs font-semibold transition-colors",
+              activeSubTab === 'activity' ? "bg-white/[0.1] text-white" : "text-slate-400 hover:text-white"
+            )}
+          >
+            {t('refActivityLog')}
+          </button>
+          <button
+            onClick={() => { playSound('click'); setActiveSubTab('leaderboard'); }}
+            className={cn(
+              "py-2 rounded-xl text-xs font-semibold transition-colors",
+              activeSubTab === 'leaderboard' ? "bg-white/[0.1] text-white" : "text-slate-400 hover:text-white"
+            )}
+          >
+            {t('refLeaderboard')}
+          </button>
+        </div>
+
+        {/* Tab 1: Real Invited Friends from Database */}
+        {activeSubTab === 'friends' && (
+          <div className="divide-y divide-white/[0.05] max-h-72 overflow-y-auto custom-scrollbar">
+            {invitedUsers.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 text-xs leading-relaxed">
+                {t('refNoFriendsYet')}
+              </div>
+            ) : (
+              invitedUsers.map((friend) => {
+                const fallbackAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(friend.username)}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
+                return (
+                  <div key={friend.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <img
+                        src={friend.photoUrl || fallbackAvatar}
+                        alt={friend.username}
+                        referrerPolicy="no-referrer"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).src = fallbackAvatar; }}
+                        className="w-9 h-9 rounded-full object-cover border border-white/10 bg-slate-800 shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-semibold text-xs text-white truncate">
+                            {friend.firstName} {friend.lastName || ''}
+                          </span>
+                          {friend.isPremium && (
+                            <Star size={11} className="fill-amber-400 text-amber-400 shrink-0" />
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                          <span className="text-sky-400 truncate">{friend.username}</span>
+                          <span>·</span>
+                          <span className="font-mono-num">{friend.gamesPlayed} games</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end shrink-0">
+                      <span className="font-mono-num font-bold text-xs text-emerald-400 flex items-center gap-1">
+                        +{friend.rewardGenerated.toFixed(2)} <TonIcon className="w-3.5 h-3.5" />
+                      </span>
+                      <span className="text-[10px] font-mono-num text-slate-500">
+                        {new Date(friend.joinedAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {/* Tab 2: Real Referral Earnings Log */}
+        {activeSubTab === 'activity' && (
+          <div className="divide-y divide-white/[0.05] max-h-72 overflow-y-auto custom-scrollbar">
+            {events.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 text-xs">
+                {lang === 'ar' ? 'لا توجد حركات مكافآت حتى الآن.' : 'No referral reward events recorded yet.'}
+              </div>
+            ) : (
+              events.map((ev) => (
+                <div key={ev.id} className="px-4 py-3 flex items-center justify-between gap-3 text-xs">
+                  <div className="min-w-0">
+                    <p className="text-slate-200 font-medium truncate">{ev.details}</p>
+                    <span className="text-[10px] font-mono-num text-slate-500">
+                      {new Date(ev.timestamp).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  <span className="font-mono-num font-bold text-emerald-400 flex items-center gap-1 shrink-0">
+                    +{ev.amount.toFixed(3)} <TonIcon className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Tab 3: Top Referrers Leaderboard */}
+        {activeSubTab === 'leaderboard' && (
+          <div className="divide-y divide-white/[0.05] max-h-72 overflow-y-auto custom-scrollbar">
+            {leaderboard.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 text-xs">
+                {lang === 'ar' ? 'كن أول المتصدرين في قائمة الإحالات!' : 'Be the first on the referral leaderboard!'}
+              </div>
+            ) : (
+              leaderboard.map((item, idx) => {
+                const fallbackAvatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(item.username)}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
+                return (
+                  <div
+                    key={item.id}
+                    className={cn(
+                      "px-4 py-2.5 flex items-center justify-between gap-3",
+                      item.id === userId && "bg-[#0098EA]/10"
+                    )}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className={cn(
+                        "w-5 text-center font-mono-num font-bold text-xs",
+                        idx === 0 ? "text-amber-400" : idx === 1 ? "text-slate-300" : idx === 2 ? "text-amber-600" : "text-slate-500"
+                      )}>
+                        #{idx + 1}
+                      </span>
+                      <img
+                        src={item.photoUrl || fallbackAvatar}
+                        alt={item.username}
+                        referrerPolicy="no-referrer"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).src = fallbackAvatar; }}
+                        className="w-8 h-8 rounded-full object-cover border border-white/10 bg-slate-800 shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <span className="font-semibold text-xs text-white truncate block">{item.firstName}</span>
+                        <span className="text-[10px] text-slate-400 truncate block">{item.username} · {item.tierName}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0 font-mono-num text-xs">
+                      <span className="text-slate-300 font-semibold">{item.referralsCount} refs</span>
+                      <span className="text-emerald-400 font-bold flex items-center gap-1">
+                        {item.referralEarnings.toFixed(2)} <TonIcon className="w-3.5 h-3.5" />
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+      </div>
+
+      <p className="text-slate-500 text-[11px] text-center px-4 leading-relaxed">
+        {t('betaNotice')}
+      </p>
+    </div>
+  );
+};
+
+interface DbTelegramUser {
+  id: string;
+  telegramId?: number | null;
+  username: string;
+  firstName: string;
+  lastName?: string;
+  photoUrl?: string;
+  languageCode?: string;
+  isPremium?: boolean;
+  balance: number;
+  gamesPlayed: number;
+  wins: number;
+  totalWagered: number;
+  referralsCount: number;
+  referralEarnings?: number;
+  referredBy?: string | null;
+  referredByUsername?: string | null;
+  walletAddress?: string | null;
+  isVip?: boolean;
+  isBanned?: boolean;
+  firstSeenAt: string;
+  lastActiveAt: string;
+  sessionsCount: number;
+  platform?: string;
+}
+
+const AdminTab: React.FC<{ t: any, balance: number, setBalance: React.Dispatch<React.SetStateAction<number>>, currentUserId: string }> = ({ balance, setBalance, currentUserId }) => {
+  const [users, setUsers] = useState<DbTelegramUser[]>([]);
+  const [auditLogs, setAuditLogs] = useState<{ id: string; timestamp: string; action: string; targetUserId: string; details: string }[]>([]);
+  const [metrics, setMetrics] = useState({
+    totalUsers: 0,
+    activeLast24h: 0,
+    totalBalance: 0,
+    totalWagered: 0,
+    totalGamesPlayed: 0,
+    connectedWallets: 0,
+    telegramPremiumCount: 0,
+    estimatedHouseRevenue: 0,
+  });
+  const [isLoadingDb, setIsLoadingDb] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterMode, setFilterMode] = useState<'all' | 'wallet' | 'vip'>('all');
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editBalanceValue, setEditBalanceValue] = useState<string>('');
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  const fetchDatabaseUsers = useCallback(async () => {
+    setIsLoadingDb(true);
+    try {
+      const res = await fetch('/api/admin/users');
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(data.users || []);
+        setAuditLogs(data.auditLogs || []);
+        if (data.metrics) setMetrics(data.metrics);
+      }
+    } catch (err) {
+      console.error('Failed to load database users:', err);
+    } finally {
+      setIsLoadingDb(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDatabaseUsers();
+  }, [fetchDatabaseUsers]);
+
+  const handleSaveUserBalance = async (targetUser: DbTelegramUser) => {
+    const parsed = parseFloat(editBalanceValue);
+    if (isNaN(parsed) || parsed < 0) return;
+
+    try {
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(targetUser.id)}/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ balance: parsed }),
+      });
+      if (res.ok) {
+        triggerHaptic('medium');
+        playSound('win');
+        if (targetUser.id === currentUserId || targetUser.username === ADMIN_USERNAME) {
+          setBalance(parsed);
+        }
+        setEditingUserId(null);
+        setStatusMessage(`Updated ${targetUser.username} balance to ${parsed.toFixed(2)} TON`);
+        setTimeout(() => setStatusMessage(null), 3500);
+        fetchDatabaseUsers();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleToggleVip = async (targetUser: DbTelegramUser) => {
+    try {
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(targetUser.id)}/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isVip: !targetUser.isVip }),
+      });
+      if (res.ok) {
+        triggerHaptic('light');
+        fetchDatabaseUsers();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteUser = async (targetUser: DbTelegramUser) => {
+    try {
+      const res = await fetch(`/api/admin/users/${encodeURIComponent(targetUser.id)}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        triggerHaptic('medium');
+        fetchDatabaseUsers();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const filteredUsers = users.filter((u) => {
+    const matchesQuery =
+      !searchQuery.trim() ||
+      u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      u.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(u.telegramId || u.id).toLowerCase().includes(searchQuery.toLowerCase());
+
+    if (!matchesQuery) return false;
+    if (filterMode === 'wallet') return Boolean(u.walletAddress);
+    if (filterMode === 'vip') return Boolean(u.isVip);
+    return true;
+  });
+
+  return (
+    <div className="p-4 flex flex-col gap-5">
+      {/* Header Banner */}
+      <div className="glass-card rounded-3xl p-5 flex items-center justify-between border border-sky-500/20">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#0098EA] to-indigo-600 flex items-center justify-center shadow-lg border border-white/20 shrink-0">
+            <ShieldCheck size={24} className="text-white" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-display font-extrabold text-white">Telegram Users Database</h2>
+            </div>
+            <p className="text-xs text-slate-400 font-medium mt-0.5">
+              Authorized Admin: <span className="text-sky-400 font-semibold">{ADMIN_USERNAME}</span> · Real-Time Records
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() => {
+            playSound('click');
+            fetchDatabaseUsers();
+          }}
+          className="w-10 h-10 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 flex items-center justify-center text-slate-200 transition-colors"
+          title="Refresh Database"
+        >
+          <RefreshCw size={17} className={isLoadingDb ? "animate-spin text-sky-400" : ""} />
+        </button>
+      </div>
+
+      {statusMessage && (
+        <div className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 px-4 py-2.5 rounded-2xl text-xs font-semibold flex items-center gap-2">
+          <CheckCircle2 size={16} className="shrink-0" />
+          <span>{statusMessage}</span>
+        </div>
+      )}
+
+      {/* Real Database KPI Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <div className="glass-card p-3.5 rounded-2xl flex flex-col gap-1">
+          <span className="text-[11px] font-medium text-slate-400">Registered Users</span>
+          <div className="flex items-baseline justify-between mt-0.5">
+            <span className="text-2xl font-mono-num font-extrabold text-white">{metrics.totalUsers}</span>
+            <span className="text-[10px] text-emerald-400 font-semibold">{metrics.activeLast24h} active 24h</span>
+          </div>
+        </div>
+        <div className="glass-card p-3.5 rounded-2xl flex flex-col gap-1">
+          <span className="text-[11px] font-medium text-slate-400">Total User Balances</span>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="text-2xl font-mono-num font-extrabold text-sky-400">{metrics.totalBalance.toFixed(2)}</span>
+            <TonIcon className="w-4 h-4" />
+          </div>
+        </div>
+        <div className="glass-card p-3.5 rounded-2xl flex flex-col gap-1">
+          <span className="text-[11px] font-medium text-slate-400">Total Wagered</span>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="text-2xl font-mono-num font-extrabold text-white">{metrics.totalWagered.toFixed(1)}</span>
+            <TonIcon className="w-4 h-4" />
+          </div>
+        </div>
+        <div className="glass-card p-3.5 rounded-2xl flex flex-col gap-1">
+          <span className="text-[11px] font-medium text-slate-400">Connected Wallets</span>
+          <div className="flex items-baseline justify-between mt-0.5">
+            <span className="text-2xl font-mono-num font-extrabold text-emerald-400">{metrics.connectedWallets}</span>
+            <span className="text-[10px] text-slate-400 font-mono-num">{metrics.totalGamesPlayed} games</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Search & Filter Controls */}
+      <div className="flex flex-col sm:flex-row gap-2.5">
+        <div className="flex-1 relative">
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by @username, name, or Telegram ID..."
+            className="w-full bg-[#111827] border border-white/10 focus:border-[#0098EA] rounded-2xl pl-10 pr-4 py-2.5 text-xs text-white placeholder:text-slate-500 outline-none transition-colors"
+          />
+        </div>
+        <div className="flex bg-[#111827] p-1 rounded-2xl border border-white/10 shrink-0">
+          {(['all', 'wallet', 'vip'] as const).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setFilterMode(mode)}
+              className={cn(
+                "px-3 py-1.5 rounded-xl text-xs font-semibold capitalize transition-colors",
+                filterMode === mode ? "bg-[#0098EA] text-white" : "text-slate-400 hover:text-white"
+              )}
+            >
+              {mode === 'all' ? `All (${users.length})` : mode === 'wallet' ? 'Has Wallet' : 'VIP'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Real Telegram Users Directory */}
+      <div className="glass-card rounded-3xl overflow-hidden border border-white/10">
+        <div className="px-4 py-3 border-b border-white/[0.07] flex items-center justify-between">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+            <Activity size={14} className="text-sky-400" />
+            <span>Telegram Mini App Users ({filteredUsers.length})</span>
+          </h3>
+          <span className="text-[11px] text-slate-400">Persistent DB</span>
+        </div>
+
+        {isLoadingDb ? (
+          <div className="p-8 flex flex-col items-center justify-center gap-2 text-slate-400">
+            <Loader2 size={24} className="animate-spin text-sky-400" />
+            <span className="text-xs font-medium">Loading users from database...</span>
+          </div>
+        ) : filteredUsers.length === 0 ? (
+          <div className="p-8 text-center text-slate-400 text-xs">
+            No matching Telegram users found in the database.
+          </div>
+        ) : (
+          <div className="divide-y divide-white/[0.06] max-h-[420px] overflow-y-auto custom-scrollbar">
+            {filteredUsers.map((u) => {
+              const avatarFallback = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.username)}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
+              const isEditing = editingUserId === u.id;
+
+              return (
+                <div key={u.id} className="p-3.5 hover:bg-white/[0.02] transition-colors flex flex-col gap-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <img
+                        src={u.photoUrl || avatarFallback}
+                        alt={u.username}
+                        referrerPolicy="no-referrer"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).src = avatarFallback; }}
+                        className="w-10 h-10 rounded-full object-cover border border-white/15 shrink-0 bg-slate-800"
+                      />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-sm text-white truncate">{u.firstName} {u.lastName || ''}</span>
+                          <span className="text-xs text-sky-400 font-medium truncate">{u.username}</span>
+                          {u.isVip && (
+                            <span className="text-[10px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded">
+                              VIP
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5 flex-wrap">
+                          <span className="font-mono-num">ID: {u.telegramId || u.id}</span>
+                          <span>·</span>
+                          <span>Lang: {(u.languageCode || 'en').toUpperCase()}</span>
+                          <span>·</span>
+                          <span>Sessions: {u.sessionsCount || 1}</span>
+                          <span>·</span>
+                          <span>Last seen: {new Date(u.lastActiveAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end shrink-0">
+                      <div className="flex items-center gap-1 font-mono-num font-extrabold text-sm text-white">
+                        <span>{u.balance.toFixed(2)}</span>
+                        <TonIcon className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-mono-num mt-0.5">
+                        {u.gamesPlayed} games · {u.referralsCount || 0} refs
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Admin Controls Row for this User */}
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <div className="text-[11px] text-slate-400 truncate">
+                      {u.walletAddress ? (
+                        <span className="text-emerald-400 font-mono-num">
+                          Wallet: {u.walletAddress.slice(0, 6)}...{u.walletAddress.slice(-4)}
+                        </span>
+                      ) : (
+                        <span>Wallet not connected</span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {isEditing ? (
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={editBalanceValue}
+                            onChange={(e) => setEditBalanceValue(e.target.value)}
+                            className="w-20 bg-[#0B0F19] border border-sky-500 rounded-lg px-2 py-1 text-xs font-mono-num font-bold text-white outline-none"
+                          />
+                          <button
+                            onClick={() => handleSaveUserBalance(u)}
+                            className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold transition-colors"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setEditingUserId(null)}
+                            className="px-2 py-1 bg-white/10 text-slate-300 rounded-lg text-xs font-medium"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => {
+                              setEditingUserId(u.id);
+                              setEditBalanceValue(u.balance.toString());
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-xs font-semibold text-slate-200 flex items-center gap-1 transition-colors"
+                          >
+                            <Edit3 size={12} /> Set Balance
+                          </button>
+                          <button
+                            onClick={() => handleToggleVip(u)}
+                            className={cn(
+                              "px-2.5 py-1 rounded-lg border text-xs font-semibold transition-colors",
+                              u.isVip
+                                ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
+                                : "bg-white/[0.04] border-white/10 text-slate-400 hover:text-white"
+                            )}
+                          >
+                            VIP
+                          </button>
+                          {u.username !== ADMIN_USERNAME && (
+                            <button
+                              onClick={() => handleDeleteUser(u)}
+                              className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 transition-colors"
+                              title="Remove User"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Real Database Audit Trail */}
+      {auditLogs.length > 0 && (
+        <div className="glass-card rounded-3xl p-4 border border-white/10">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5">Recent Database Activity</h4>
+          <div className="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1">
+            {auditLogs.slice(0, 10).map((log) => (
+              <div key={log.id} className="text-xs flex items-center justify-between text-slate-300 py-1 border-b border-white/[0.04] last:border-0">
+                <span className="truncate pr-2">{log.details}</span>
+                <span className="text-[10px] font-mono-num text-slate-500 shrink-0">
+                  {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ProfileTab: React.FC<{
+  username: string;
+  photoUrl: string;
+  userId: string;
+  balance: number;
+  setBalance: React.Dispatch<React.SetStateAction<number>>;
+  walletConnected: boolean;
+  walletAddress: string | null;
+  onConnectWallet: () => void;
+  onDisconnectWallet: () => void;
+  onNavigateTab: (tab: Tab) => void;
+  lang: Language;
+  t: any;
+  onDepositClick: () => void;
+}> = ({
+  username,
+  photoUrl,
+  userId,
+  balance,
+  walletConnected,
+  walletAddress,
+  onConnectWallet,
+  onDisconnectWallet,
+  onNavigateTab,
+  lang,
+  t,
+  onDepositClick,
+}) => {
+  const [gamesPlayed, setGamesPlayed] = useState(0);
+  const [userWins, setUserWins] = useState(0);
+  const [totalWagered, setTotalWagered] = useState(0);
+  const [referralsCount, setReferralsCount] = useState(0);
+  const [referralTierName, setReferralTierName] = useState('Starter · 10%');
+  const [showConnectWarning, setShowConnectWarning] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [copiedUid, setCopiedUid] = useState(false);
+  const [copiedWallet, setCopiedWallet] = useState(false);
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    const refreshStats = () => {
+      const g1 = parseInt(localStorage.getItem('tq_user_games_played') || '0');
+      const g2 = parseInt(localStorage.getItem('game2_games_played') || '0');
+      const storedWins = parseInt(localStorage.getItem('tq_user_wins') || '0');
+      const storedWagered = parseFloat(localStorage.getItem('tq_user_total_wagered') || '0');
+      const storedRefs = parseInt(localStorage.getItem('portals_total_referrals') || '0');
+      setGamesPlayed(Math.max(g1, g1 + g2));
+      setUserWins(storedWins);
+      setTotalWagered(storedWagered);
+      setReferralsCount(storedRefs);
+    };
+    refreshStats();
+
+    if (userId) {
+      fetch(`/api/referrals/${encodeURIComponent(userId)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data) {
+            if (typeof data.referralsCount === 'number') setReferralsCount(data.referralsCount);
+            if (data.tier?.name && data.tier?.percentLabel) {
+              setReferralTierName(`${data.tier.name} · ${data.tier.percentLabel}`);
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [userId, balance]);
+
+  const dicebearUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
+  const finalPhotoUrl = photoUrl && !imgError ? photoUrl : dicebearUrl;
+
+  const userXp = parseInt(localStorage.getItem('tq_user_xp') || '0') + gamesPlayed * 25 + referralsCount * 50;
+  const level = Math.floor(Math.sqrt(userXp / 25)) + 1;
+  const currentLevelBaseXp = Math.pow(level - 1, 2) * 25;
+  const nextLevelXp = Math.pow(level, 2) * 25;
+  const xpProgress = Math.min(
+    100,
+    Math.max(8, Math.round(((userXp - currentLevelBaseXp) / Math.max(1, nextLevelXp - currentLevelBaseXp)) * 100))
+  );
+
+  const rankTitle =
+    level >= 15
+      ? lang === 'ar' ? 'حوت TON' : 'TON Whale'
+      : level >= 8
+      ? lang === 'ar' ? 'محترف النخبة' : 'Elite Pro'
+      : level >= 4
+      ? lang === 'ar' ? 'متحدي الساحة' : 'Contender'
+      : lang === 'ar' ? 'مستكشف' : 'Explorer';
+
+  const winRate = gamesPlayed > 0 ? Math.min(100, Math.round((userWins / gamesPlayed) * 100)) : 0;
+  const withdrawProgress = Math.min(100, (balance / 100) * 100);
+  const cleanUsername = username.startsWith('@') ? username : `@${username}`;
+  const formattedWallet = walletAddress
+    ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
+    : null;
+
+  const handleCopyUid = () => {
+    playSound('click');
+    triggerHaptic('light');
+    navigator.clipboard.writeText(userId || cleanUsername);
+    setCopiedUid(true);
+    setTimeout(() => setCopiedUid(false), 2000);
+  };
+
+  const handleCopyWallet = () => {
+    if (!walletAddress) return;
+    playSound('click');
+    triggerHaptic('light');
+    navigator.clipboard.writeText(walletAddress);
+    setCopiedWallet(true);
+    setTimeout(() => setCopiedWallet(false), 2000);
+  };
+
+  return (
+    <div className="p-4 flex flex-col gap-3.5 max-w-xl mx-auto w-full">
+      {/* 1. Executive Identity & Level Card */}
+      <div className="glass-card rounded-3xl p-5 relative overflow-hidden">
+        {/* Subtle Ambient Top Halo */}
+        <div
+          className="absolute -top-20 left-1/2 -translate-x-1/2 w-64 h-40 rounded-full pointer-events-none opacity-25 blur-3xl"
+          style={{ background: 'radial-gradient(circle, #0098EA 0%, transparent 70%)' }}
+        />
+
+        <div className="relative z-10 flex items-center gap-4">
+          {/* Avatar with Gradient Ring & Level Badge */}
+          <div className="relative shrink-0">
+            <div className="w-20 h-20 rounded-full p-[2px] bg-gradient-to-b from-[#0098EA] via-[#0098EA]/40 to-white/10 shadow-[0_8px_24px_rgba(0,152,234,0.25)]">
+              <div className="w-full h-full rounded-full overflow-hidden bg-[#090C12]">
+                <img
+                  src={finalPhotoUrl}
+                  alt={cleanUsername}
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                  onError={() => setImgError(true)}
+                />
+              </div>
+            </div>
+            <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 bg-[#0098EA] text-white text-[10px] font-mono-num font-extrabold px-2.5 py-0.5 rounded-full border-2 border-[#090C12] shadow-md whitespace-nowrap">
+              Lv. {level}
+            </div>
+          </div>
+
+          {/* User Info & UID Pill */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-lg font-display font-bold text-white truncate">{cleanUsername}</h2>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white/[0.06] text-sky-400 border border-white/[0.08]">
+                {rankTitle}
+              </span>
+              {gamesPlayed >= 50 && (
+                <span className="text-[10px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-md flex items-center gap-1">
+                  <Crown size={10} /> VIP
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 mt-1.5">
+              <button
+                onClick={handleCopyUid}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#090C12] border border-white/[0.06] hover:border-white/15 text-[11px] font-mono-num text-slate-400 hover:text-slate-200 transition-colors"
+              >
+                <span>ID: {userId || '---'}</span>
+                {copiedUid ? (
+                  <CheckCircle2 size={11} className="text-emerald-400" />
+                ) : (
+                  <Copy size={11} className="text-slate-500" />
+                )}
+              </button>
+              <span className="text-[11px] text-slate-500 truncate">{t('joinedDate')}</span>
+            </div>
+
+            {/* XP Progress Bar */}
+            <div className="mt-3">
+              <div className="flex items-center justify-between text-[10px] mb-1">
+                <span className="text-slate-400 font-medium">
+                  {lang === 'ar' ? 'تقدم المستوى' : 'Level Progress'}
+                </span>
+                <span className="font-mono-num text-slate-300 font-semibold">{userXp} XP</span>
+              </div>
+              <div className="h-1.5 w-full bg-[#090C12] rounded-full overflow-hidden border border-white/[0.04]">
+                <div
+                  className="h-full bg-gradient-to-r from-[#0098EA] to-[#38BDF8] rounded-full transition-all duration-500"
+                  style={{ width: `${xpProgress}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Luxury TON Vault Card */}
+      <div className="rounded-3xl p-5 relative overflow-hidden bg-gradient-to-br from-[#131C31] via-[#0F1523] to-[#090C12] border border-white/[0.1] shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
+        <div
+          className="absolute -right-12 -top-12 w-40 h-40 rounded-full pointer-events-none opacity-20 blur-2xl"
+          style={{ background: 'radial-gradient(circle, #0098EA 0%, transparent 70%)' }}
+        />
+
+        {/* Top Bar of Vault */}
+        <div className="flex items-center justify-between gap-2 relative z-10">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-[#0098EA]/20 border border-[#0098EA]/30 flex items-center justify-center">
+              <Wallet size={14} className="text-[#38BDF8]" />
+            </div>
+            <span className="text-xs font-semibold text-slate-300">{t('walletBalance')}</span>
+          </div>
+
+          {walletConnected && formattedWallet ? (
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={handleCopyWallet}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-[11px] font-mono-num text-emerald-300 hover:bg-emerald-500/15 transition-colors"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>{formattedWallet}</span>
+                {copiedWallet ? <CheckCircle2 size={11} /> : <Copy size={11} />}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                playSound('click');
+                onConnectWallet();
+              }}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-[11px] font-semibold text-sky-400 transition-colors"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+              <span>{t('connect')}</span>
+            </button>
+          )}
+        </div>
+
+        {/* Main Balance Readout */}
+        <div className="my-5 flex items-baseline justify-between relative z-10">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <span className="text-3xl sm:text-4xl font-mono-num font-extrabold text-white tracking-tight">
+                {balance.toFixed(2)}
+              </span>
+              <TonIcon className="w-7 h-7" />
+            </div>
+            <span className="text-xs font-mono-num text-slate-400 mt-1 block">
+              ≈ ${(balance * 5.25).toFixed(2)} USD
+            </span>
+          </div>
+
+          <div className="text-right">
+            <span className="text-[10px] uppercase tracking-wider text-slate-400 block">
+              {lang === 'ar' ? 'جاهزية السحب' : 'Withdraw Unlock'}
+            </span>
+            <span className="text-xs font-mono-num font-bold text-slate-200">
+              {Math.min(100, Math.round(withdrawProgress))}%
+            </span>
+          </div>
+        </div>
+
+        {/* Deposit & Withdraw Action Buttons */}
+        <div className="grid grid-cols-2 gap-2.5 relative z-10">
+          <button
+            onClick={() => {
+              playSound('click');
+              triggerHaptic('light');
+              if (!walletConnected) {
+                setShowConnectWarning(true);
+                return;
+              }
+              onDepositClick();
+            }}
+            className="bg-[#0098EA] hover:bg-[#0088D1] text-white font-semibold text-xs py-3 rounded-xl flex items-center justify-center gap-2 luxury-button shadow-[0_4px_16px_rgba(0,152,234,0.3)]"
+          >
+            <ArrowDownToLine size={16} /> {t('deposit')}
+          </button>
+
+          <button
+            onClick={() => {
+              playSound('click');
+              triggerHaptic('light');
+              if (!walletConnected) {
+                setShowConnectWarning(true);
+                return;
+              }
+              setShowWithdrawModal(true);
+            }}
+            className="bg-white/[0.07] hover:bg-white/[0.12] border border-white/10 text-white font-semibold text-xs py-3 rounded-xl flex items-center justify-center gap-2 luxury-button"
+          >
+            <ArrowUpFromLine size={16} /> {t('withdraw')}
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-[var(--color-game-card)] p-4 rounded-2xl cartoon-border flex flex-col items-center justify-center gap-1">
-          <span className="text-[var(--color-tg-muted)] text-xs uppercase font-bold tracking-wider">{t('totalReferrals')}</span>
-          <span className="text-4xl font-bold text-stroke">{referrals}</span>
-        </div>
-        <div className="bg-[var(--color-game-card)] p-4 rounded-2xl cartoon-border flex flex-col items-center justify-center gap-1">
-          <span className="text-[var(--color-tg-muted)] text-xs uppercase font-bold tracking-wider">{t('earned')}</span>
-          <span className="text-3xl font-bold text-green-400 text-stroke flex items-center gap-1">{earned.toFixed(2)} <TonIcon className="w-6 h-6" /></span>
-        </div>
-      </div>
-      
-      <button 
-        onClick={() => { playSound('click'); handleCopy(); }}
-        className="w-full bg-gradient-to-b from-green-400 to-green-600 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all cartoon-button text-stroke text-lg mt-4"
-      >
-        <Share2 size={20} /> {t('shareLink')}
-      </button>
-    </div>
-  );
-}
-
-const ProfileTab: React.FC<{ username: string, photoUrl: string, balance: number, setBalance: React.Dispatch<React.SetStateAction<number>>, walletConnected: boolean, t: any, onDepositClick: () => void }> = ({ username, photoUrl, balance, setBalance, walletConnected, t, onDepositClick }) => {
-  const [gamesPlayed, setGamesPlayed] = useState(0);
-  const [userWins, setUserWins] = useState(0);
-  const [totalWagered, setTotalWagered] = useState(0);
-  const [showConnectWarning, setShowConnectWarning] = useState(false);
-  const [imgError, setImgError] = useState(false);
-
-  useEffect(() => {
-    const storedGames = parseInt(localStorage.getItem('tq_user_games_played') || '0');
-    const storedWins = parseInt(localStorage.getItem('tq_user_wins') || '0');
-    const storedWagered = parseFloat(localStorage.getItem('tq_user_total_wagered') || '0');
-    setGamesPlayed(storedGames);
-    setUserWins(storedWins);
-    setTotalWagered(storedWagered);
-  }, []);
-
-  const dicebearUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
-  const finalPhotoUrl = (photoUrl && !imgError) ? photoUrl : dicebearUrl;
-
-  return (
-    <div className="p-4 flex flex-col gap-6">
-      <div className="relative mt-12">
-        {/* Glow effect behind the card */}
-        <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-[2rem] blur opacity-30 animate-pulse-slow"></div>
-        
-        <div className="bg-[#1a1b26]/90 backdrop-blur-xl p-6 rounded-3xl border border-white/10 flex flex-col items-center text-center relative shadow-2xl">
-          <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-indigo-500/20 to-transparent rounded-t-3xl pointer-events-none" />
-          
-          <div className="absolute -top-12 w-24 h-24 bg-gradient-to-br from-indigo-400 to-purple-600 rounded-full border-4 border-[#1a1b26] flex items-center justify-center text-4xl font-bold shadow-xl z-20 text-white ring-4 ring-white/5 overflow-hidden">
-            <img 
-              src={finalPhotoUrl} 
-              alt={username} 
-              className="w-full h-full object-cover" 
-              referrerPolicy="no-referrer" 
-              onError={() => setImgError(true)} 
-            />
+      {/* 3. Three-Column Performance Bento Grid */}
+      <div className="grid grid-cols-3 gap-2.5">
+        <div className="glass-card p-3.5 rounded-2xl flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-[11px]">{t('gamesPlayed')}</span>
+            <Trophy size={13} className="text-sky-400" />
           </div>
-          
-          <div className="mt-10 flex items-center gap-2">
-            <h2 className="text-3xl font-bold text-white tracking-tight">{username.startsWith('@') ? username : `@${username}`}</h2>
-            {gamesPlayed >= 50 && (
-              <div className="bg-gradient-to-r from-yellow-400 to-yellow-600 text-[10px] uppercase font-black px-2 py-0.5 rounded-md text-black shadow-[0_0_10px_rgba(250,204,21,0.5)]">VIP</div>
-            )}
-          </div>
-          <p className="text-indigo-300/70 text-sm mb-4 font-medium tracking-wide">{t('joinedDate')}</p>
-          
-          {/* Level Progress Bar */}
-          <div className="w-full mb-6">
-            <div className="flex justify-between items-end mb-1">
-              <span className="text-xs font-bold text-indigo-300">Level {Math.floor(Math.sqrt(gamesPlayed + (parseInt(localStorage.getItem('tq_user_xp') || '0') / 10))) + 1}</span>
-              <span className="text-[10px] text-indigo-400/60">{gamesPlayed * 10 + parseInt(localStorage.getItem('tq_user_xp') || '0')} XP</span>
-            </div>
-            <div className="h-2 w-full bg-black/50 rounded-full overflow-hidden border border-white/5">
-              <div 
-                className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full"
-                style={{ width: `${Math.min(100, ((gamesPlayed * 10 + parseInt(localStorage.getItem('tq_user_xp') || '0')) % 100))}%` }}
-              />
-            </div>
-          </div>
-          
-          <div className="w-full bg-black/40 rounded-2xl p-5 flex flex-col gap-1 border border-white/5 shadow-inner relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
-            <span className="text-indigo-300/70 text-xs uppercase font-bold tracking-wider relative z-10">{t('walletBalance')}</span>
-            <span className="text-4xl font-black text-white relative z-10 tracking-tight flex items-center justify-center gap-2">
-              {balance.toFixed(2)} <TonIcon className="w-8 h-8" />
+          <div className="mt-2">
+            <span className="text-xl font-mono-num font-bold text-white">{gamesPlayed}</span>
+            <span className="text-[10px] font-mono-num text-slate-400 block mt-0.5">
+              {userWins} {lang === 'ar' ? 'فوز' : 'wins'}
             </span>
           </div>
-          
-          {/* Action Buttons */}
-          <div className="grid grid-cols-2 gap-4 mt-5 w-full">
-            <button 
-              onClick={() => {
-                playSound('click');
-                if (!walletConnected) {
-                  setShowConnectWarning(true);
-                  return;
-                }
-                onDepositClick();
-              }}
-              className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all duration-200 hover:shadow-[0_0_15px_rgba(255,255,255,0.1)]"
-            >
-              <ArrowDownToLine size={18} className="text-green-400" /> {t('deposit')}
-            </button>
-            <button 
-              onClick={() => {
-                playSound('click');
-                if (!walletConnected) {
-                  setShowConnectWarning(true);
-                  return;
-                }
-                if (balance < 100) {
-                  alert(t('minWithdrawal'));
-                  return;
-                }
-                alert(t('withdrawProcessing'));
-              }}
-              className="bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all duration-200 hover:shadow-[0_0_15px_rgba(255,255,255,0.1)]"
-            >
-              <ArrowUpFromLine size={18} className="text-red-400" /> {t('withdraw')}
-            </button>
+        </div>
+
+        <div className="glass-card p-3.5 rounded-2xl flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-[11px]">{t('winRate')}</span>
+            <Activity size={13} className="text-emerald-400" />
+          </div>
+          <div className="mt-2">
+            <span className="text-xl font-mono-num font-bold text-emerald-400">{winRate}%</span>
+            <div className="h-1 w-full bg-[#090C12] rounded-full overflow-hidden mt-1.5">
+              <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${winRate}%` }} />
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card p-3.5 rounded-2xl flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-400">
+            <span className="text-[11px]">{t('totalWagered')}</span>
+            <Flame size={13} className="text-amber-400" />
+          </div>
+          <div className="mt-2">
+            <span className="text-xl font-mono-num font-bold text-white flex items-center gap-1">
+              {totalWagered.toFixed(1)} <TonIcon className="w-4 h-4" />
+            </span>
+            <span className="text-[10px] text-slate-400 block mt-0.5">TON Volume</span>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 mt-2">
-        <h3 className="text-[var(--color-tg-muted)] text-sm font-bold uppercase tracking-wider px-2">{t('statistics')}</h3>
-        <div className="grid grid-cols-2 gap-3 mb-2">
-          <div className="bg-[var(--color-game-card)] p-4 rounded-2xl cartoon-border flex flex-col items-center justify-center gap-1">
-            <span className="text-[var(--color-tg-muted)] text-[10px] uppercase font-bold tracking-wider">{t('winRate')}</span>
-            <span className="text-2xl font-bold text-green-400 text-stroke">{gamesPlayed > 0 ? Math.round((userWins / gamesPlayed) * 100) : 0}%</span>
+      {/* 4. Interactive Account & Partner Settings Card */}
+      <div className="glass-card rounded-2xl overflow-hidden divide-y divide-white/[0.06]">
+        <div
+          onClick={() => {
+            playSound('click');
+            if (walletConnected) {
+              onDisconnectWallet();
+            } else {
+              onConnectWallet();
+            }
+          }}
+          className="flex items-center justify-between px-4 py-3.5 hover:bg-white/[0.03] transition-colors cursor-pointer"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-white/[0.04] flex items-center justify-center text-slate-300">
+              <Wallet size={16} />
+            </div>
+            <div>
+              <span className="text-xs font-semibold text-white block">{t('walletConnection')}</span>
+              <span className="text-[11px] text-slate-400">
+                {walletConnected && formattedWallet
+                  ? formattedWallet
+                  : lang === 'ar'
+                  ? 'اضغط لربط محفظة TON'
+                  : 'Tap to connect TON wallet'}
+              </span>
+            </div>
           </div>
-          <div className="bg-[var(--color-game-card)] p-4 rounded-2xl cartoon-border flex flex-col items-center justify-center gap-1">
-            <span className="text-[var(--color-tg-muted)] text-[10px] uppercase font-bold tracking-wider">{t('totalWagered')}</span>
-            <span className="text-2xl font-bold text-white text-stroke flex items-center gap-1">{totalWagered.toFixed(1)} <TonIcon className="w-4 h-4" /></span>
-          </div>
+          <span
+            className={cn(
+              "text-xs font-semibold px-2.5 py-1 rounded-lg border",
+              walletConnected
+                ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+                : "text-sky-400 bg-sky-500/10 border-sky-500/20"
+            )}
+          >
+            {walletConnected ? t('connected') : t('connect')}
+          </span>
         </div>
 
-        <h3 className="text-[var(--color-tg-muted)] text-sm font-bold uppercase tracking-wider px-2 mt-2">{t('settings')}</h3>
-        <div className="bg-[var(--color-game-card)] rounded-2xl cartoon-border overflow-hidden flex flex-col">
-          <SettingRow icon={<Wallet size={20} />} label={t('walletConnection')} value={walletConnected ? t('connected') : t('notConnected')} valueColor={walletConnected ? 'text-green-400' : 'text-red-400'} />
-          <div className="h-px bg-white/5 ml-12" />
-          <SettingRow icon={<Trophy size={20} />} label={t('gamesPlayed')} value={gamesPlayed.toString()} />
-          <div className="h-px bg-white/5 ml-12" />
-          <SettingRow icon={<Users size={20} />} label={t('referralTier')} value={gamesPlayed >= 50 ? "Gold" : "Bronze"} valueColor={gamesPlayed >= 50 ? "text-yellow-400" : "text-[#CD7F32]"} />
+        <div
+          onClick={() => {
+            playSound('click');
+            onNavigateTab('referrals');
+          }}
+          className="flex items-center justify-between px-4 py-3.5 hover:bg-white/[0.03] transition-colors cursor-pointer"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-xl bg-white/[0.04] flex items-center justify-center text-slate-300">
+              <Users size={16} />
+            </div>
+            <div>
+              <span className="text-xs font-semibold text-white block">{t('referralTier')}</span>
+              <span className="text-[11px] text-slate-400">
+                {referralsCount} {lang === 'ar' ? 'أصدقاء محالون' : 'invited friends'}
+              </span>
+            </div>
+          </div>
+          <span className="text-xs font-mono-num font-bold text-[#38BDF8] bg-[#0098EA]/15 border border-[#0098EA]/30 px-2.5 py-1 rounded-lg">
+            {referralTierName}
+          </span>
         </div>
       </div>
 
       {/* Connect Warning Modal */}
       <AnimatePresence>
         {showConnectWarning && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
+            className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
           >
-            <motion.div 
-              initial={{ scale: 0.9, y: 20 }}
+            <motion.div
+              initial={{ scale: 0.95, y: 10 }}
               animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              className="bg-[var(--color-game-card)] p-6 rounded-3xl cartoon-border w-full max-w-sm flex flex-col gap-4 text-center"
+              exit={{ scale: 0.95, y: 10 }}
+              className="bg-[#111622] border border-white/10 p-6 rounded-3xl w-full max-w-sm flex flex-col gap-3 text-center shadow-2xl"
             >
-              <h3 className="text-3xl font-bold text-stroke text-red-400">{t('oops')}</h3>
-              <p className="font-bold text-lg">{t('connectWalletFirst')}</p>
-              
-              <button 
-                onClick={() => { playSound('click'); setShowConnectWarning(false); }}
-                className="bg-gradient-to-b from-[var(--color-game-primary)] to-[var(--color-game-secondary)] text-white font-bold py-3 rounded-xl cartoon-button text-stroke mt-2"
+              <div className="w-12 h-12 rounded-2xl bg-[#0098EA]/15 border border-[#0098EA]/30 flex items-center justify-center mx-auto">
+                <Wallet size={24} className="text-[#0098EA]" />
+              </div>
+              <h3 className="text-lg font-display font-bold text-white">{t('oops')}</h3>
+              <p className="text-slate-300 text-xs leading-relaxed">{t('connectWalletFirst')}</p>
+
+              <div className="grid grid-cols-2 gap-2.5 mt-2">
+                <button
+                  onClick={() => {
+                    playSound('click');
+                    setShowConnectWarning(false);
+                  }}
+                  className="bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 font-semibold text-xs py-3 rounded-xl"
+                >
+                  {t('cancel')}
+                </button>
+                <button
+                  onClick={() => {
+                    playSound('click');
+                    setShowConnectWarning(false);
+                    onConnectWallet();
+                  }}
+                  className="bg-[#0098EA] hover:bg-[#0088D1] text-white font-semibold text-xs py-3 rounded-xl luxury-button"
+                >
+                  {t('connect')}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {showWithdrawModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/75 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 10 }}
+              className="bg-[#111622] border border-white/10 p-6 rounded-3xl w-full max-w-sm flex flex-col gap-4 text-center shadow-2xl"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-[#0098EA]/15 border border-[#0098EA]/30 flex items-center justify-center mx-auto">
+                <ArrowUpFromLine size={24} className="text-[#0098EA]" />
+              </div>
+              <div>
+                <h3 className="text-lg font-display font-bold text-white">{t('withdraw')} TON</h3>
+                <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+                  {balance < 100 ? t('minWithdrawal') : t('withdrawProcessing')}
+                </p>
+              </div>
+
+              <div className="bg-[#090C12] border border-white/[0.06] rounded-2xl p-3.5 flex flex-col gap-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-400">
+                    {lang === 'ar' ? 'الرصيد الحالي' : 'Current Balance'}
+                  </span>
+                  <span className="font-mono-num font-bold text-white">
+                    {balance.toFixed(2)} / 100 TON
+                  </span>
+                </div>
+                <div className="h-2 w-full bg-white/[0.06] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#0098EA] rounded-full transition-all duration-500"
+                    style={{ width: `${withdrawProgress}%` }}
+                  />
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  playSound('click');
+                  setShowWithdrawModal(false);
+                }}
+                className="bg-[#0098EA] hover:bg-[#0088D1] text-white font-semibold text-xs py-3 rounded-xl luxury-button"
               >
                 {t('ok')}
               </button>
@@ -2546,16 +3948,5 @@ const ProfileTab: React.FC<{ username: string, photoUrl: string, balance: number
       </AnimatePresence>
     </div>
   );
-}
+};
 
-function SettingRow({ icon, label, value, valueColor = "text-white/80" }: { icon: React.ReactNode, label: string, value: string, valueColor?: string }) {
-  return (
-    <div className="flex items-center justify-between p-4 active:bg-white/5 transition-colors cursor-pointer" onClick={() => playSound('click')}>
-      <div className="flex items-center gap-3">
-        <div className="text-[var(--color-game-accent)]">{icon}</div>
-        <span className="font-bold">{label}</span>
-      </div>
-      <span className={cn("text-sm font-bold", valueColor)}>{value}</span>
-    </div>
-  );
-}
